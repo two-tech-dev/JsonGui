@@ -1,29 +1,3 @@
-<<<<<<< HEAD
-# !!!
-This plugin is beta, to use using command in command prompt:
-
-## Step 1:
-```markdown
-npm install
-npm run build
-```
-
-## Step 2:
-terminal 1:
-```markdown
-npm run dev:api
-```
-
-terminal 2:
-```markdown
-npm run dev
-```
-
-# WHAT IS THIS?
-
-## Why did I create it?
-This thing was made for lazy people, a tool to code Minecraft GUI interfaces easily and intuitively because AI generates really ugly interfaces, so I made this!
-=======
 <div align="center">
 
 # JsonGui
@@ -247,4 +221,3 @@ When reporting an editor issue, include the container type, affected slot or ite
 ## Disclaimer
 
 JsonGui is an independent development tool and is not affiliated with Mojang Studios or Microsoft. Minecraft names and assets belong to their respective owners.
->>>>>>> 7a95dea (docs: rewrite project README)
