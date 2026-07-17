@@ -17,3 +17,8 @@ terminal 2:
 ```markdown
 npm run dev
 ```
+
+# WHAT IS THIS?
+
+## Why did I create it?
+This thing was made for lazy people, a tool to code Minecraft GUI interfaces easily and intuitively because AI generates really ugly interfaces, so I made this!
