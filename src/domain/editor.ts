@@ -1,0 +1,141 @@
+export type ItemCategory = "Tools" | "Decoration" | "Combat" | "Food" | "Redstone" | "Utility" | "Misc";
+export type PreviewMode = "editor" | "minecraft";
+export type Overlay = "prompt" | "container" | "export" | "placed" | "library" | null;
+export type PromptTarget = { kind: "library"; itemId: string } | { kind: "placement"; slot: number } | null;
+
+export interface ContainerSpec { id: string; label: string; bukkitId: string; slots: number; rows: number; columns: number; kind: "grid" | "hopper" | "special"; compatibility: "Direct" | "Special" | "Unavailable"; role?: string; }
+export interface ItemDefinition { id: string; name: string; material: string; category: ItemCategory; icon: string; maxStack: number; description: string; }
+export type ItemAction =
+  | { type: "prompt_only" }
+  | { type: "close_inventory" }
+  | { type: "open_gui"; guiId: string }
+  | { type: "run_command"; command: string }
+  | { type: "give_item"; material: string; amount: number }
+  | { type: "teleport"; world: string; x: number; y: number; z: number; yaw?: number; pitch?: number }
+  | { type: "send_message"; message: string };
+export interface ItemDefault { prompt: string; action: ItemAction; developerNotes?: string; }
+export interface PlacedItem { slot: number; itemId: string; amount: number; displayName: string; lore: string[]; prompt: string; action: ItemAction; developerNotes?: string; includeInExport?: boolean; }
+export interface ProjectDocument { schemaVersion: 1; id: string; revision: number; catalogVersion: string; title: string; description: string; containerId: string; itemDefaults: Record<string, ItemDefault>; placements: PlacedItem[]; updatedAt: string; }
+
+export interface EditorState {
+  projectId: string; revision: number; catalogVersion: string; catalog: ItemDefinition[]; title: string; description: string; container: ContainerSpec; placements: Record<number, PlacedItem>; itemDefaults: Record<string, ItemDefault>;
+  favorites: string[]; recentItemIds: string[]; selectedSlot: number | null; selectedLibraryItemId: string | null; promptTarget: PromptTarget; query: string; category: ItemCategory | "All"; libraryTab: "All" | "Recent" | "Favorites";
+  previewMode: PreviewMode; showSlotNumbers: boolean; showPlayerInventory: boolean; showRoles: boolean; zoom: 0.75 | 1 | 1.25 | 1.5; overlay: Overlay; drawerTab: "Details" | "Prompt" | "JSON";
+  draftPrompt: string; draftTitle: string; draftLore: string[]; draftDeveloperNotes: string; draftAction: ItemAction;
+  toast: { message: string; tone: "success" | "info" | "warning" | "error"; undo?: boolean } | null; dirty: boolean;
+}
+
+export const CONTAINERS: ContainerSpec[] = [
+  { id: "double-chest", label: "Double Chest", bukkitId: "CHEST", slots: 54, rows: 6, columns: 9, kind: "grid", compatibility: "Direct" },
+  { id: "single-chest", label: "Single Chest", bukkitId: "CHEST", slots: 27, rows: 3, columns: 9, kind: "grid", compatibility: "Direct" },
+  { id: "barrel", label: "Barrel", bukkitId: "BARREL", slots: 27, rows: 3, columns: 9, kind: "grid", compatibility: "Direct" },
+  { id: "shulker", label: "Shulker Box", bukkitId: "SHULKER_BOX", slots: 27, rows: 3, columns: 9, kind: "grid", compatibility: "Direct" },
+  { id: "hopper", label: "Hopper", bukkitId: "HOPPER", slots: 5, rows: 1, columns: 5, kind: "hopper", compatibility: "Direct" },
+  { id: "dispenser", label: "Dispenser", bukkitId: "DISPENSER", slots: 9, rows: 3, columns: 3, kind: "grid", compatibility: "Direct" },
+  { id: "dropper", label: "Dropper", bukkitId: "DROPPER", slots: 9, rows: 3, columns: 3, kind: "grid", compatibility: "Direct" },
+  { id: "furnace", label: "Furnace", bukkitId: "FURNACE", slots: 3, rows: 1, columns: 3, kind: "special", compatibility: "Special", role: "Input · Fuel · Result" },
+  { id: "brewing", label: "Brewing Stand", bukkitId: "BREWING", slots: 5, rows: 1, columns: 5, kind: "special", compatibility: "Special", role: "Bottles · Ingredient · Fuel" },
+  { id: "anvil", label: "Anvil", bukkitId: "ANVIL", slots: 3, rows: 1, columns: 3, kind: "special", compatibility: "Special", role: "Input · Input · Result" },
+  { id: "workbench", label: "Workbench", bukkitId: "WORKBENCH", slots: 10, rows: 3, columns: 4, kind: "special", compatibility: "Special", role: "Crafting · Result" },
+  { id: "creative", label: "Creative", bukkitId: "CREATIVE", slots: 0, rows: 0, columns: 0, kind: "special", compatibility: "Unavailable" },
+  { id: "merchant", label: "Merchant", bukkitId: "MERCHANT", slots: 0, rows: 0, columns: 0, kind: "special", compatibility: "Unavailable" },
+];
+
+export const FALLBACK_ITEMS: ItemDefinition[] = [];
+const defaultAction: ItemAction = { type: "prompt_only" };
+export const initialState: EditorState = {
+  projectId: "main-menu", revision: 1, catalogVersion: "minecraft-java-1.21.8", catalog: FALLBACK_ITEMS, title: "Main Menu", description: "Menu chính cho server survival", container: CONTAINERS[0], placements: {}, itemDefaults: {}, favorites: [], recentItemIds: [], selectedSlot: null, selectedLibraryItemId: null, promptTarget: null, query: "", category: "All", libraryTab: "All", previewMode: "editor", showSlotNumbers: true, showPlayerInventory: true, showRoles: true, zoom: 1, overlay: null, drawerTab: "Prompt", draftPrompt: "", draftTitle: "", draftLore: [], draftDeveloperNotes: "", draftAction: defaultAction, toast: null, dirty: false,
+};
+
+export type Action =
+  | { type: "HYDRATE"; project: ProjectDocument; catalog: ItemDefinition[] }
+  | { type: "LOAD_CATALOG"; catalog: ItemDefinition[]; version: string }
+  | { type: "MARK_SAVED"; revision?: number }
+  | { type: "SELECT_SLOT"; slot: number | null }
+  | { type: "SELECT_LIBRARY"; itemId: string | null }
+  | { type: "TOGGLE_FAVORITE"; itemId: string }
+  | { type: "OPEN_PROMPT"; target: PromptTarget }
+  | { type: "SET_QUERY"; query: string }
+  | { type: "SET_CATEGORY"; category: EditorState["category"] }
+  | { type: "SET_TAB"; tab: EditorState["libraryTab"] }
+  | { type: "PLACE_ITEM"; slot: number; itemId: string; amount?: number }
+  | { type: "MOVE_ITEM"; from: number; to: number }
+  | { type: "REMOVE_ITEM"; slot: number }
+  | { type: "SET_AMOUNT"; slot: number; amount: number }
+  | { type: "SET_TITLE"; title: string }
+  | { type: "SET_PROMPT_DRAFT"; prompt: string }
+  | { type: "SET_DRAFT_TITLE"; title: string }
+  | { type: "SET_DRAFT_LORE"; lore: string[] }
+  | { type: "SET_DRAFT_NOTES"; notes: string }
+  | { type: "SET_DRAFT_ACTION"; action: ItemAction }
+  | { type: "SAVE_PROMPT" }
+  | { type: "SET_OPTION"; option: "showSlotNumbers" | "showPlayerInventory" | "showRoles"; value: boolean }
+  | { type: "SET_MODE"; mode: PreviewMode }
+  | { type: "SET_ZOOM"; zoom: EditorState["zoom"] }
+  | { type: "OPEN_OVERLAY"; overlay: Exclude<Overlay, null> }
+  | { type: "CLOSE_OVERLAY" }
+  | { type: "SET_DRAWER_TAB"; tab: EditorState["drawerTab"] }
+  | { type: "SET_CONTAINER"; container: ContainerSpec }
+  | { type: "RESET" }
+  | { type: "TOAST"; toast: NonNullable<EditorState["toast"]> }
+  | { type: "CLEAR_TOAST" };
+
+export function getItem(itemId: string, catalog: ItemDefinition[] = FALLBACK_ITEMS): ItemDefinition | undefined { return catalog.find((entry) => entry.id === itemId); }
+export function isValidContainerSlot(slot: number, container: ContainerSpec): boolean { return Number.isInteger(slot) && slot >= 0 && slot < container.slots; }
+export function getFilteredItems(state: EditorState): ItemDefinition[] {
+  const tokens = state.query.trim().toLowerCase().split(/\s+/).filter(Boolean); const favoriteIds = new Set(state.favorites); const recentIds = new Set(state.recentItemIds);
+  return state.catalog.filter((entry) => { if (state.category !== "All" && entry.category !== state.category) return false; if (state.libraryTab === "Favorites" && !favoriteIds.has(entry.id)) return false; if (state.libraryTab === "Recent" && !recentIds.has(entry.id)) return false; const haystack = `${entry.id} ${entry.name} ${entry.material} ${entry.category} ${entry.description}`.toLowerCase(); return tokens.every((token) => haystack.includes(token)); });
+}
+export function trimForContainer(placements: Record<number, PlacedItem>, container: ContainerSpec): Record<number, PlacedItem> { return Object.fromEntries(Object.entries(placements).filter(([slot]) => Number.isInteger(Number(slot)) && Number(slot) < container.slots)); }
+export function editorStateToProject(state: EditorState): ProjectDocument { return { schemaVersion: 1, id: state.projectId, revision: state.revision, catalogVersion: state.catalogVersion, title: state.title, description: state.description, containerId: state.container.id, itemDefaults: state.itemDefaults, placements: Object.values(state.placements).sort((a, b) => a.slot - b.slot), updatedAt: new Date().toISOString() }; }
+
+export function projectToEditorState(project: ProjectDocument, catalog: ItemDefinition[]): EditorState {
+  const container = CONTAINERS.find((entry) => entry.id === project.containerId) ?? CONTAINERS[0]; const placements = Object.fromEntries(project.placements.map((entry) => [entry.slot, entry])); const selectedSlot = project.placements[0]?.slot ?? null; const selected = selectedSlot === null ? undefined : placements[selectedSlot];
+  return { ...initialState, projectId: project.id, revision: project.revision, catalogVersion: project.catalogVersion, catalog, title: project.title, description: project.description, container, placements, itemDefaults: project.itemDefaults ?? {}, selectedSlot, selectedLibraryItemId: selected?.itemId ?? null, promptTarget: selected ? { kind: "placement", slot: selected.slot } : null, draftPrompt: selected?.prompt ?? "", draftTitle: selected?.displayName ?? "", draftLore: selected?.lore ?? [], draftDeveloperNotes: selected?.developerNotes ?? "", draftAction: selected?.action ?? defaultAction, dirty: false };
+}
+export function buildExport(state: EditorState, options: { includePrompts?: boolean } = {}): string {
+  const includePrompts = options.includePrompts ?? true; const items = Object.values(state.placements).filter((entry) => entry.includeInExport !== false && isValidContainerSlot(entry.slot, state.container)).sort((a, b) => a.slot - b.slot).map((entry) => { const definition = getItem(entry.itemId, state.catalog); return { slot: entry.slot, itemId: entry.itemId, material: definition?.material ?? "UNKNOWN", amount: entry.amount, displayName: entry.displayName, lore: entry.lore, ...(includePrompts && entry.prompt.trim() ? { prompt: entry.prompt } : {}), action: entry.action }; });
+  return JSON.stringify({ format: "gui-forge/minecraft-java-gui", formatVersion: 1, catalogVersion: state.catalogVersion, container: { id: state.container.id, bukkitType: state.container.bukkitId, rows: state.container.rows, slots: state.container.slots }, title: state.title, items }, null, 2);
+}
+
+function draftForTarget(state: EditorState, target: PromptTarget): Pick<EditorState, "draftPrompt" | "draftTitle" | "draftLore" | "draftDeveloperNotes" | "draftAction"> {
+  if (target?.kind === "placement") { const item = state.placements[target.slot]; return { draftPrompt: item?.prompt ?? "", draftTitle: item?.displayName ?? "", draftLore: item?.lore ?? [], draftDeveloperNotes: item?.developerNotes ?? "", draftAction: item?.action ?? defaultAction }; }
+  if (target?.kind === "library") { const definition = getItem(target.itemId, state.catalog); const defaults = state.itemDefaults[target.itemId]; return { draftPrompt: defaults?.prompt ?? "", draftTitle: definition?.name ?? "", draftLore: [], draftDeveloperNotes: defaults?.developerNotes ?? "", draftAction: defaults?.action ?? defaultAction }; }
+  return { draftPrompt: "", draftTitle: "", draftLore: [], draftDeveloperNotes: "", draftAction: defaultAction };
+}
+
+export function reducer(state: EditorState, action: Action): EditorState {
+  switch (action.type) {
+    case "HYDRATE": return projectToEditorState(action.project, action.catalog);
+    case "LOAD_CATALOG": return { ...state, catalog: action.catalog, catalogVersion: action.version };
+    case "MARK_SAVED": return { ...state, dirty: false, revision: action.revision ?? state.revision };
+    case "SELECT_SLOT": { const target = action.slot !== null && state.placements[action.slot] ? { kind: "placement" as const, slot: action.slot } : null; const next = { ...state, selectedSlot: action.slot, selectedLibraryItemId: action.slot === null ? null : state.placements[action.slot]?.itemId ?? state.selectedLibraryItemId, promptTarget: target }; return { ...next, ...draftForTarget(next, target) }; }
+    case "SELECT_LIBRARY": { if (!action.itemId) return { ...state, selectedLibraryItemId: null }; return { ...state, selectedLibraryItemId: action.itemId, recentItemIds: [action.itemId, ...state.recentItemIds.filter((id) => id !== action.itemId)].slice(0, 24) }; }
+    case "TOGGLE_FAVORITE": return { ...state, favorites: state.favorites.includes(action.itemId) ? state.favorites.filter((id) => id !== action.itemId) : [...state.favorites, action.itemId] };
+    case "OPEN_PROMPT": { const draft = draftForTarget(state, action.target); if (action.target?.kind === "placement") { const item = state.placements[action.target.slot]; return { ...state, selectedSlot: action.target.slot, selectedLibraryItemId: item?.itemId ?? null, promptTarget: action.target, overlay: "prompt", drawerTab: "Prompt", ...draft }; } if (action.target?.kind === "library") return { ...state, selectedLibraryItemId: action.target.itemId, promptTarget: action.target, overlay: "prompt", drawerTab: "Prompt", ...draft }; return { ...state, promptTarget: null, overlay: "prompt", drawerTab: "Prompt", ...draft }; }
+    case "SET_QUERY": return { ...state, query: action.query };
+    case "SET_CATEGORY": return { ...state, category: action.category };
+    case "SET_TAB": return { ...state, libraryTab: action.tab };
+    case "PLACE_ITEM": { if (!isValidContainerSlot(action.slot, state.container)) return state; const definition = getItem(action.itemId, state.catalog); if (!definition) return { ...state, toast: { message: "Item không tồn tại trong catalog đã chọn", tone: "error" } }; const defaults = state.itemDefaults[action.itemId] ?? { prompt: "", action: defaultAction }; const next: PlacedItem = { slot: action.slot, itemId: action.itemId, amount: Math.min(action.amount ?? 1, definition.maxStack), displayName: definition.name, lore: [], prompt: defaults.prompt, action: structuredClone(defaults.action), developerNotes: defaults.developerNotes ?? "", includeInExport: true }; return { ...state, placements: { ...state.placements, [action.slot]: next }, selectedSlot: action.slot, selectedLibraryItemId: action.itemId, promptTarget: { kind: "placement", slot: action.slot }, dirty: true, draftPrompt: next.prompt, draftTitle: next.displayName, draftLore: [], draftDeveloperNotes: next.developerNotes ?? "", draftAction: next.action }; }
+    case "MOVE_ITEM": { if (!isValidContainerSlot(action.to, state.container) || !state.placements[action.from]) return state; const placements = { ...state.placements }; const moving = placements[action.from]; const target = placements[action.to]; placements[action.to] = { ...moving, slot: action.to }; if (target) placements[action.from] = { ...target, slot: action.from }; else delete placements[action.from]; return { ...state, placements, selectedSlot: action.to, promptTarget: { kind: "placement", slot: action.to }, dirty: true, toast: { message: `Đã chuyển item sang Slot ${action.to}`, tone: "success", undo: true } }; }
+    case "REMOVE_ITEM": { const removed = state.placements[action.slot]; const placements = { ...state.placements }; delete placements[action.slot]; return { ...state, placements, selectedSlot: null, selectedLibraryItemId: null, promptTarget: null, dirty: true, toast: { message: removed ? `Đã xóa ${removed.displayName} khỏi Slot ${action.slot}` : "Đã xóa item khỏi GUI", tone: "info", undo: true } }; }
+    case "SET_AMOUNT": { const current = state.placements[action.slot]; const max = current ? getItem(current.itemId, state.catalog)?.maxStack ?? 64 : 64; return current ? { ...state, placements: { ...state.placements, [action.slot]: { ...current, amount: Math.max(1, Math.min(max, action.amount)) } }, dirty: true } : state; }
+    case "SET_TITLE": return { ...state, title: action.title, dirty: true };
+    case "SET_PROMPT_DRAFT": return { ...state, draftPrompt: action.prompt };
+    case "SET_DRAFT_TITLE": return { ...state, draftTitle: action.title };
+    case "SET_DRAFT_LORE": return { ...state, draftLore: action.lore };
+    case "SET_DRAFT_NOTES": return { ...state, draftDeveloperNotes: action.notes };
+    case "SET_DRAFT_ACTION": return { ...state, draftAction: action.action };
+    case "SAVE_PROMPT": { const data = { prompt: state.draftPrompt, displayName: state.draftTitle, lore: state.draftLore, developerNotes: state.draftDeveloperNotes }; if (state.promptTarget?.kind === "placement") { const current = state.placements[state.promptTarget.slot]; if (!current) return state; return { ...state, placements: { ...state.placements, [state.promptTarget.slot]: { ...current, ...data, displayName: state.draftTitle || current.displayName, action: state.draftAction } }, dirty: true, toast: { message: `Đã lưu cấu hình ${state.draftTitle || current.displayName}`, tone: "success" } }; } if (state.promptTarget?.kind === "library") { const definition = getItem(state.promptTarget.itemId, state.catalog); return { ...state, itemDefaults: { ...state.itemDefaults, [state.promptTarget.itemId]: { prompt: state.draftPrompt, action: state.draftAction, developerNotes: state.draftDeveloperNotes } }, dirty: true, toast: { message: `Đã lưu prompt mặc định cho ${definition?.name ?? "item"}`, tone: "success" } }; } return state; }
+    case "SET_OPTION": return { ...state, [action.option]: action.value };
+    case "SET_MODE": return { ...state, previewMode: action.mode };
+    case "SET_ZOOM": return { ...state, zoom: action.zoom };
+    case "OPEN_OVERLAY": return { ...state, overlay: action.overlay };
+    case "CLOSE_OVERLAY": return { ...state, overlay: null };
+    case "SET_DRAWER_TAB": return { ...state, drawerTab: action.tab };
+    case "SET_CONTAINER": { const placements = trimForContainer(state.placements, action.container); return { ...state, container: action.container, placements, selectedSlot: state.selectedSlot !== null && isValidContainerSlot(state.selectedSlot, action.container) ? state.selectedSlot : null, overlay: null, dirty: true, toast: { message: `Đã chuyển sang ${action.container.label} · ${action.container.slots} slots`, tone: "success" } }; }
+    case "RESET": return initialState;
+    case "TOAST": return { ...state, toast: action.toast };
+    case "CLEAR_TOAST": return { ...state, toast: null };
+  }
+}

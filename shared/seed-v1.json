@@ -1,0 +1,108 @@
+{
+  "schemaVersion": 1,
+  "catalog": {
+    "version": "minecraft-java-1.21.8-fandom-r2345112-b6b9c799be5a",
+    "minecraftVersion": "1.21.8",
+    "edition": "java",
+    "source": {
+      "kind": "seed",
+      "url": "https://minecraft.fandom.com/wiki/Item",
+      "revisionId": "123",
+      "revisionTimestamp": "2026-07-17T00:00:00.000Z",
+      "contentHash": "b6b9c799be5a",
+      "parserVersion": 2,
+      "itemCount": 1399,
+      "fetchedAt": "2026-07-17T00:00:00.000Z"
+    },
+    "items": [
+      {
+        "id": "minecraft:barrier",
+        "name": "Barrier",
+        "material": "BARRIER",
+        "category": "Utility",
+        "icon": "barrier",
+        "maxStack": 64,
+        "description": "Barrier block"
+      },
+      {
+        "id": "minecraft:bread",
+        "name": "Bread",
+        "material": "BREAD",
+        "category": "Food",
+        "icon": "bread",
+        "maxStack": 64,
+        "description": "Bread food"
+      },
+      {
+        "id": "minecraft:compass",
+        "name": "Compass",
+        "material": "COMPASS",
+        "category": "Tools",
+        "icon": "compass",
+        "maxStack": 1,
+        "description": "Compass navigation"
+      },
+      {
+        "id": "minecraft:diamond",
+        "name": "Diamond",
+        "material": "DIAMOND",
+        "category": "Misc",
+        "icon": "diamond",
+        "maxStack": 64,
+        "description": "Diamond gem"
+      },
+      {
+        "id": "minecraft:netherite_sword",
+        "name": "Netherite Sword",
+        "material": "NETHERITE_SWORD",
+        "category": "Combat",
+        "icon": "netherite_sword",
+        "maxStack": 1,
+        "description": "Netherite Sword weapon"
+      },
+      {
+        "id": "minecraft:redstone",
+        "name": "Redstone Dust",
+        "material": "REDSTONE",
+        "category": "Redstone",
+        "icon": "redstone",
+        "maxStack": 64,
+        "description": "Redstone wire"
+      },
+      {
+        "id": "minecraft:spawn_egg",
+        "name": "Spawn Egg",
+        "material": "ZOMBIE_SPAWN_EGG",
+        "category": "Decoration",
+        "icon": "spawn_egg",
+        "maxStack": 64,
+        "description": "Spawn egg"
+      }
+    ]
+  },
+  "containers": [
+    { "id": "double-chest", "label": "Double Chest", "bukkitId": "CHEST", "slots": 54, "rows": 6, "columns": 9, "kind": "grid", "compatibility": "Direct" },
+    { "id": "single-chest", "label": "Single Chest", "bukkitId": "CHEST", "slots": 27, "rows": 3, "columns": 9, "kind": "grid", "compatibility": "Direct" },
+    { "id": "barrel", "label": "Barrel", "bukkitId": "BARREL", "slots": 27, "rows": 3, "columns": 9, "kind": "grid", "compatibility": "Direct" },
+    { "id": "shulker", "label": "Shulker Box", "bukkitId": "SHULKER_BOX", "slots": 27, "rows": 3, "columns": 9, "kind": "grid", "compatibility": "Direct" },
+    { "id": "hopper", "label": "Hopper", "bukkitId": "HOPPER", "slots": 5, "rows": 1, "columns": 5, "kind": "hopper", "compatibility": "Direct" },
+    { "id": "dispenser", "label": "Dispenser", "bukkitId": "DISPENSER", "slots": 9, "rows": 3, "columns": 3, "kind": "grid", "compatibility": "Direct" },
+    { "id": "dropper", "label": "Dropper", "bukkitId": "DROPPER", "slots": 9, "rows": 3, "columns": 3, "kind": "grid", "compatibility": "Direct" },
+    { "id": "furnace", "label": "Furnace", "bukkitId": "FURNACE", "slots": 3, "rows": 1, "columns": 3, "kind": "special", "compatibility": "Special", "role": "Input · Fuel · Result" },
+    { "id": "brewing", "label": "Brewing Stand", "bukkitId": "BREWING", "slots": 5, "rows": 1, "columns": 5, "kind": "special", "compatibility": "Special", "role": "Bottles · Ingredient · Fuel" },
+    { "id": "anvil", "label": "Anvil", "bukkitId": "ANVIL", "slots": 3, "rows": 1, "columns": 3, "kind": "special", "compatibility": "Special", "role": "Input · Input · Result" },
+    { "id": "workbench", "label": "Workbench", "bukkitId": "WORKBENCH", "slots": 10, "rows": 3, "columns": 4, "kind": "special", "compatibility": "Special", "role": "Crafting · Result" }
+  ],
+  "project": {
+    "schemaVersion": 1,
+    "id": "main-menu",
+    "revision": 1,
+    "catalogVersion": "minecraft-java-1.21.8-fandom-r2345112-b6b9c799be5a",
+    "title": "Main Menu",
+    "description": "Menu chính cho server survival",
+    "containerId": "double-chest",
+    "itemDefaults": {},
+    "placements": [],
+    "updatedAt": "2026-07-17T00:00:00.000Z"
+  }
+}
