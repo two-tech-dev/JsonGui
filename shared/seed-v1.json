@@ -19,7 +19,7 @@
         "id": "minecraft:barrier",
         "name": "Barrier",
         "material": "BARRIER",
-        "category": "Utility",
+        "category": "Decoration",
         "icon": "barrier",
         "maxStack": 64,
         "description": "Barrier block"
@@ -73,7 +73,7 @@
         "id": "minecraft:spawn_egg",
         "name": "Spawn Egg",
         "material": "ZOMBIE_SPAWN_EGG",
-        "category": "Decoration",
+        "category": "Utility",
         "icon": "spawn_egg",
         "maxStack": 64,
         "description": "Spawn egg"
@@ -81,17 +81,120 @@
     ]
   },
   "containers": [
-    { "id": "double-chest", "label": "Double Chest", "bukkitId": "CHEST", "slots": 54, "rows": 6, "columns": 9, "kind": "grid", "compatibility": "Direct" },
-    { "id": "single-chest", "label": "Single Chest", "bukkitId": "CHEST", "slots": 27, "rows": 3, "columns": 9, "kind": "grid", "compatibility": "Direct" },
-    { "id": "barrel", "label": "Barrel", "bukkitId": "BARREL", "slots": 27, "rows": 3, "columns": 9, "kind": "grid", "compatibility": "Direct" },
-    { "id": "shulker", "label": "Shulker Box", "bukkitId": "SHULKER_BOX", "slots": 27, "rows": 3, "columns": 9, "kind": "grid", "compatibility": "Direct" },
-    { "id": "hopper", "label": "Hopper", "bukkitId": "HOPPER", "slots": 5, "rows": 1, "columns": 5, "kind": "hopper", "compatibility": "Direct" },
-    { "id": "dispenser", "label": "Dispenser", "bukkitId": "DISPENSER", "slots": 9, "rows": 3, "columns": 3, "kind": "grid", "compatibility": "Direct" },
-    { "id": "dropper", "label": "Dropper", "bukkitId": "DROPPER", "slots": 9, "rows": 3, "columns": 3, "kind": "grid", "compatibility": "Direct" },
-    { "id": "furnace", "label": "Furnace", "bukkitId": "FURNACE", "slots": 3, "rows": 1, "columns": 3, "kind": "special", "compatibility": "Special", "role": "Input · Fuel · Result" },
-    { "id": "brewing", "label": "Brewing Stand", "bukkitId": "BREWING", "slots": 5, "rows": 1, "columns": 5, "kind": "special", "compatibility": "Special", "role": "Bottles · Ingredient · Fuel" },
-    { "id": "anvil", "label": "Anvil", "bukkitId": "ANVIL", "slots": 3, "rows": 1, "columns": 3, "kind": "special", "compatibility": "Special", "role": "Input · Input · Result" },
-    { "id": "workbench", "label": "Workbench", "bukkitId": "WORKBENCH", "slots": 10, "rows": 3, "columns": 4, "kind": "special", "compatibility": "Special", "role": "Crafting · Result" }
+    {
+      "id": "double-chest",
+      "label": "Double Chest",
+      "bukkitId": "CHEST",
+      "slots": 54,
+      "rows": 6,
+      "columns": 9,
+      "kind": "grid",
+      "compatibility": "Direct"
+    },
+    {
+      "id": "single-chest",
+      "label": "Single Chest",
+      "bukkitId": "CHEST",
+      "slots": 27,
+      "rows": 3,
+      "columns": 9,
+      "kind": "grid",
+      "compatibility": "Direct"
+    },
+    {
+      "id": "barrel",
+      "label": "Barrel",
+      "bukkitId": "BARREL",
+      "slots": 27,
+      "rows": 3,
+      "columns": 9,
+      "kind": "grid",
+      "compatibility": "Direct"
+    },
+    {
+      "id": "shulker",
+      "label": "Shulker Box",
+      "bukkitId": "SHULKER_BOX",
+      "slots": 27,
+      "rows": 3,
+      "columns": 9,
+      "kind": "grid",
+      "compatibility": "Direct"
+    },
+    {
+      "id": "hopper",
+      "label": "Hopper",
+      "bukkitId": "HOPPER",
+      "slots": 5,
+      "rows": 1,
+      "columns": 5,
+      "kind": "hopper",
+      "compatibility": "Direct"
+    },
+    {
+      "id": "dispenser",
+      "label": "Dispenser",
+      "bukkitId": "DISPENSER",
+      "slots": 9,
+      "rows": 3,
+      "columns": 3,
+      "kind": "grid",
+      "compatibility": "Direct"
+    },
+    {
+      "id": "dropper",
+      "label": "Dropper",
+      "bukkitId": "DROPPER",
+      "slots": 9,
+      "rows": 3,
+      "columns": 3,
+      "kind": "grid",
+      "compatibility": "Direct"
+    },
+    {
+      "id": "furnace",
+      "label": "Furnace",
+      "bukkitId": "FURNACE",
+      "slots": 3,
+      "rows": 1,
+      "columns": 3,
+      "kind": "special",
+      "compatibility": "Special",
+      "role": "Input · Fuel · Result"
+    },
+    {
+      "id": "brewing",
+      "label": "Brewing Stand",
+      "bukkitId": "BREWING",
+      "slots": 5,
+      "rows": 1,
+      "columns": 5,
+      "kind": "special",
+      "compatibility": "Special",
+      "role": "Bottles · Ingredient · Fuel"
+    },
+    {
+      "id": "anvil",
+      "label": "Anvil",
+      "bukkitId": "ANVIL",
+      "slots": 3,
+      "rows": 1,
+      "columns": 3,
+      "kind": "special",
+      "compatibility": "Special",
+      "role": "Input · Input · Result"
+    },
+    {
+      "id": "workbench",
+      "label": "Workbench",
+      "bukkitId": "WORKBENCH",
+      "slots": 10,
+      "rows": 3,
+      "columns": 4,
+      "kind": "special",
+      "compatibility": "Special",
+      "role": "Crafting · Result"
+    }
   ],
   "project": {
     "schemaVersion": 1,

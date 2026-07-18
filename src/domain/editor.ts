@@ -3,7 +3,7 @@ export type PreviewMode = "editor" | "minecraft";
 export type Overlay = "prompt" | "container" | "export" | "placed" | "library" | null;
 export type PromptTarget = { kind: "library"; itemId: string } | { kind: "placement"; slot: number } | null;
 
-export interface ContainerSpec { id: string; label: string; bukkitId: string; slots: number; rows: number; columns: number; kind: "grid" | "hopper" | "special"; compatibility: "Direct" | "Special" | "Unavailable"; role?: string; }
+export interface ContainerSpec { id: string; label: string; bukkitId: string; slots: number; rows: number; columns: number; kind: "grid" | "hopper" | "special"; compatibility: "Direct" | "Special" | "Unavailable"; category: "Storage" | "Processing" | "Utility" | "Entity"; role?: string; }
 export interface ItemDefinition { id: string; name: string; material: string; category: ItemCategory; icon: string; maxStack: number; description: string; }
 export type ItemAction =
   | { type: "prompt_only" }
@@ -26,19 +26,28 @@ export interface EditorState {
 }
 
 export const CONTAINERS: ContainerSpec[] = [
-  { id: "double-chest", label: "Double Chest", bukkitId: "CHEST", slots: 54, rows: 6, columns: 9, kind: "grid", compatibility: "Direct" },
-  { id: "single-chest", label: "Single Chest", bukkitId: "CHEST", slots: 27, rows: 3, columns: 9, kind: "grid", compatibility: "Direct" },
-  { id: "barrel", label: "Barrel", bukkitId: "BARREL", slots: 27, rows: 3, columns: 9, kind: "grid", compatibility: "Direct" },
-  { id: "shulker", label: "Shulker Box", bukkitId: "SHULKER_BOX", slots: 27, rows: 3, columns: 9, kind: "grid", compatibility: "Direct" },
-  { id: "hopper", label: "Hopper", bukkitId: "HOPPER", slots: 5, rows: 1, columns: 5, kind: "hopper", compatibility: "Direct" },
-  { id: "dispenser", label: "Dispenser", bukkitId: "DISPENSER", slots: 9, rows: 3, columns: 3, kind: "grid", compatibility: "Direct" },
-  { id: "dropper", label: "Dropper", bukkitId: "DROPPER", slots: 9, rows: 3, columns: 3, kind: "grid", compatibility: "Direct" },
-  { id: "furnace", label: "Furnace", bukkitId: "FURNACE", slots: 3, rows: 1, columns: 3, kind: "special", compatibility: "Special", role: "Input · Fuel · Result" },
-  { id: "brewing", label: "Brewing Stand", bukkitId: "BREWING", slots: 5, rows: 1, columns: 5, kind: "special", compatibility: "Special", role: "Bottles · Ingredient · Fuel" },
-  { id: "anvil", label: "Anvil", bukkitId: "ANVIL", slots: 3, rows: 1, columns: 3, kind: "special", compatibility: "Special", role: "Input · Input · Result" },
-  { id: "workbench", label: "Workbench", bukkitId: "WORKBENCH", slots: 10, rows: 3, columns: 4, kind: "special", compatibility: "Special", role: "Crafting · Result" },
-  { id: "creative", label: "Creative", bukkitId: "CREATIVE", slots: 0, rows: 0, columns: 0, kind: "special", compatibility: "Unavailable" },
-  { id: "merchant", label: "Merchant", bukkitId: "MERCHANT", slots: 0, rows: 0, columns: 0, kind: "special", compatibility: "Unavailable" },
+  { id: "double-chest", label: "Generic 54", bukkitId: "CHEST", slots: 54, rows: 6, columns: 9, kind: "grid", compatibility: "Direct", category: "Storage" },
+  { id: "single-chest", label: "Generic 27", bukkitId: "CHEST", slots: 27, rows: 3, columns: 9, kind: "grid", compatibility: "Direct", category: "Storage" },
+  { id: "barrel", label: "Barrel", bukkitId: "BARREL", slots: 27, rows: 3, columns: 9, kind: "grid", compatibility: "Direct", category: "Storage" },
+  { id: "shulker", label: "Shulker Box", bukkitId: "SHULKER_BOX", slots: 27, rows: 3, columns: 9, kind: "grid", compatibility: "Direct", category: "Storage" },
+  { id: "hopper", label: "Hopper", bukkitId: "HOPPER", slots: 5, rows: 1, columns: 5, kind: "hopper", compatibility: "Direct", category: "Storage" },
+  { id: "dispenser", label: "Dispenser", bukkitId: "DISPENSER", slots: 9, rows: 3, columns: 3, kind: "grid", compatibility: "Direct", category: "Utility" },
+  { id: "dropper", label: "Dropper", bukkitId: "DROPPER", slots: 9, rows: 3, columns: 3, kind: "grid", compatibility: "Direct", category: "Utility" },
+  { id: "furnace", label: "Furnace", bukkitId: "FURNACE", slots: 3, rows: 1, columns: 3, kind: "special", compatibility: "Special", category: "Processing", role: "Input · Fuel · Result" },
+  { id: "blast-furnace", label: "Blast Furnace", bukkitId: "BLAST_FURNACE", slots: 3, rows: 1, columns: 3, kind: "special", compatibility: "Special", category: "Processing", role: "Input · Fuel · Result" },
+  { id: "smoker", label: "Smoker", bukkitId: "SMOKER", slots: 3, rows: 1, columns: 3, kind: "special", compatibility: "Special", category: "Processing", role: "Input · Fuel · Result" },
+  { id: "brewing", label: "Brewing Stand", bukkitId: "BREWING", slots: 5, rows: 1, columns: 5, kind: "special", compatibility: "Special", category: "Processing", role: "Bottles · Ingredient · Fuel" },
+  { id: "anvil", label: "Anvil", bukkitId: "ANVIL", slots: 3, rows: 1, columns: 3, kind: "special", compatibility: "Special", category: "Processing", role: "Input · Input · Result" },
+  { id: "grindstone", label: "Grindstone", bukkitId: "GRINDSTONE", slots: 3, rows: 1, columns: 3, kind: "special", compatibility: "Special", category: "Processing", role: "Input · Input · Result" },
+  { id: "smithing", label: "Smithing Table", bukkitId: "SMITHING", slots: 4, rows: 1, columns: 4, kind: "special", compatibility: "Special", category: "Processing", role: "Template · Input · Material · Result" },
+  { id: "workbench", label: "Crafting Table", bukkitId: "WORKBENCH", slots: 10, rows: 3, columns: 4, kind: "special", compatibility: "Special", category: "Utility", role: "Crafting · Result" },
+  { id: "cartography", label: "Cartography Table", bukkitId: "CARTOGRAPHY", slots: 3, rows: 1, columns: 3, kind: "special", compatibility: "Special", category: "Utility", role: "Map · Paper · Result" },
+  { id: "stonecutter", label: "Stonecutter", bukkitId: "STONECUTTER", slots: 2, rows: 1, columns: 2, kind: "special", compatibility: "Special", category: "Utility", role: "Input · Result" },
+  { id: "enchanting", label: "Enchanting Table", bukkitId: "ENCHANTING", slots: 2, rows: 1, columns: 2, kind: "special", compatibility: "Special", category: "Utility", role: "Item · Lapis" },
+  { id: "loom", label: "Loom", bukkitId: "LOOM", slots: 4, rows: 1, columns: 4, kind: "special", compatibility: "Special", category: "Utility", role: "Banner · Dye · Pattern · Result" },
+  { id: "horse", label: "Horse Inventory", bukkitId: "HORSE", slots: 17, rows: 3, columns: 5, kind: "special", compatibility: "Special", category: "Entity", role: "Saddle · Armor · Storage" },
+  { id: "merchant", label: "Villager Trading", bukkitId: "MERCHANT", slots: 3, rows: 1, columns: 3, kind: "special", compatibility: "Special", category: "Entity", role: "Input · Input · Result" },
+  { id: "creative", label: "Creative Inventory", bukkitId: "CREATIVE", slots: 0, rows: 0, columns: 0, kind: "special", compatibility: "Unavailable", category: "Utility" },
 ];
 
 export const FALLBACK_ITEMS: ItemDefinition[] = [];
@@ -78,7 +87,8 @@ export type Action =
   | { type: "SET_CONTAINER"; container: ContainerSpec }
   | { type: "RESET" }
   | { type: "TOAST"; toast: NonNullable<EditorState["toast"]> }
-  | { type: "CLEAR_TOAST" };
+  | { type: "CLEAR_TOAST" }
+  | { type: "RENAME_ITEM"; slot: number; name: string };
 
 export function getItem(itemId: string, catalog: ItemDefinition[] = FALLBACK_ITEMS): ItemDefinition | undefined { return catalog.find((entry) => entry.id === itemId); }
 export function isValidContainerSlot(slot: number, container: ContainerSpec): boolean { return Number.isInteger(slot) && slot >= 0 && slot < container.slots; }
@@ -89,9 +99,20 @@ export function getFilteredItems(state: EditorState): ItemDefinition[] {
 export function trimForContainer(placements: Record<number, PlacedItem>, container: ContainerSpec): Record<number, PlacedItem> { return Object.fromEntries(Object.entries(placements).filter(([slot]) => Number.isInteger(Number(slot)) && Number(slot) < container.slots)); }
 export function editorStateToProject(state: EditorState): ProjectDocument { return { schemaVersion: 1, id: state.projectId, revision: state.revision, catalogVersion: state.catalogVersion, title: state.title, description: state.description, containerId: state.container.id, itemDefaults: state.itemDefaults, placements: Object.values(state.placements).sort((a, b) => a.slot - b.slot), updatedAt: new Date().toISOString() }; }
 
+export function categorizeItem(item: ItemDefinition): ItemCategory {
+  const value = `${item.id} ${item.name} ${item.description}`.toLowerCase();
+  if (/(sword|axe|bow|crossbow|trident|mace|spear|shield|helmet|chestplate|leggings|boots|elytra|totem)/.test(value)) return "Combat";
+  if (/(pickaxe|shovel|hoe|shears|fishing_rod|flint_and_steel|brush|spyglass|compass|clock|lead|name_tag|map)/.test(value)) return "Tools";
+  if (/(apple|bread|beef|porkchop|chicken|mutton|rabbit|cod|salmon|stew|soup|cookie|cake|carrot|potato|melon|berries|honey|kelp|beetroot|fish)/.test(value)) return "Food";
+  if (/(redstone|repeater|comparator|piston|observer|hopper|dispenser|dropper|lever|button|pressure_plate|rail|tnt|sculk|copper_bulb)/.test(value)) return "Redstone";
+  if (/(bucket|boat|minecart|chest|barrel|shulker|furnace|crafting|smithing|anvil|grindstone|loom|stonecutter|cartography|enchant|brewing|cauldron|beacon|potion|book|banner|sign|bed|spawn_egg)/.test(value)) return "Utility";
+  if (/(block|planks|log|wood|leaves|sapling|flower|coral|glass|wool|terracotta|concrete|brick|stone|dirt|sand|gravel|ore|fence|door|trapdoor|slab|stairs|wall|lantern|torch|painting|frame|pot|carpet)/.test(value)) return "Decoration";
+  return item.category;
+}
 export function projectToEditorState(project: ProjectDocument, catalog: ItemDefinition[]): EditorState {
   const container = CONTAINERS.find((entry) => entry.id === project.containerId) ?? CONTAINERS[0]; const placements = Object.fromEntries(project.placements.map((entry) => [entry.slot, entry])); const selectedSlot = project.placements[0]?.slot ?? null; const selected = selectedSlot === null ? undefined : placements[selectedSlot];
-  return { ...initialState, projectId: project.id, revision: project.revision, catalogVersion: project.catalogVersion, catalog, title: project.title, description: project.description, container, placements, itemDefaults: project.itemDefaults ?? {}, selectedSlot, selectedLibraryItemId: selected?.itemId ?? null, promptTarget: selected ? { kind: "placement", slot: selected.slot } : null, draftPrompt: selected?.prompt ?? "", draftTitle: selected?.displayName ?? "", draftLore: selected?.lore ?? [], draftDeveloperNotes: selected?.developerNotes ?? "", draftAction: selected?.action ?? defaultAction, dirty: false };
+  const categorizedCatalog = catalog.map((item) => ({ ...item, category: categorizeItem(item) }));
+  return { ...initialState, projectId: project.id, revision: project.revision, catalogVersion: project.catalogVersion, catalog: categorizedCatalog, title: project.title, description: project.description, container, placements, itemDefaults: project.itemDefaults ?? {}, selectedSlot, selectedLibraryItemId: selected?.itemId ?? null, promptTarget: selected ? { kind: "placement", slot: selected.slot } : null, draftPrompt: selected?.prompt ?? "", draftTitle: selected?.displayName ?? "", draftLore: selected?.lore ?? [], draftDeveloperNotes: selected?.developerNotes ?? "", draftAction: selected?.action ?? defaultAction, dirty: false };
 }
 export function buildExport(state: EditorState, options: { includePrompts?: boolean } = {}): string {
   const includePrompts = options.includePrompts ?? true; const items = Object.values(state.placements).filter((entry) => entry.includeInExport !== false && isValidContainerSlot(entry.slot, state.container)).sort((a, b) => a.slot - b.slot).map((entry) => { const definition = getItem(entry.itemId, state.catalog); return { slot: entry.slot, itemId: entry.itemId, material: definition?.material ?? "UNKNOWN", amount: entry.amount, displayName: entry.displayName, lore: entry.lore, ...(includePrompts && entry.prompt.trim() ? { prompt: entry.prompt } : {}), action: entry.action }; });
@@ -107,7 +128,7 @@ function draftForTarget(state: EditorState, target: PromptTarget): Pick<EditorSt
 export function reducer(state: EditorState, action: Action): EditorState {
   switch (action.type) {
     case "HYDRATE": return projectToEditorState(action.project, action.catalog);
-    case "LOAD_CATALOG": return { ...state, catalog: action.catalog, catalogVersion: action.version };
+    case "LOAD_CATALOG": return { ...state, catalog: action.catalog.map((item) => ({ ...item, category: categorizeItem(item) })), catalogVersion: action.version };
     case "MARK_SAVED": return { ...state, dirty: false, revision: action.revision ?? state.revision };
     case "SELECT_SLOT": { const target = action.slot !== null && state.placements[action.slot] ? { kind: "placement" as const, slot: action.slot } : null; const next = { ...state, selectedSlot: action.slot, selectedLibraryItemId: action.slot === null ? null : state.placements[action.slot]?.itemId ?? state.selectedLibraryItemId, promptTarget: target }; return { ...next, ...draftForTarget(next, target) }; }
     case "SELECT_LIBRARY": { if (!action.itemId) return { ...state, selectedLibraryItemId: null }; return { ...state, selectedLibraryItemId: action.itemId, recentItemIds: [action.itemId, ...state.recentItemIds.filter((id) => id !== action.itemId)].slice(0, 24) }; }
@@ -137,5 +158,16 @@ export function reducer(state: EditorState, action: Action): EditorState {
     case "RESET": return initialState;
     case "TOAST": return { ...state, toast: action.toast };
     case "CLEAR_TOAST": return { ...state, toast: null };
+    case "RENAME_ITEM": {
+      const current = state.placements[action.slot];
+      if (!current) return state;
+      return {
+        ...state,
+        placements: { ...state.placements, [action.slot]: { ...current, displayName: action.name } },
+        dirty: true,
+        draftTitle: state.selectedSlot === action.slot ? action.name : state.draftTitle,
+        toast: { message: `Đã đổi tên thành: ${action.name}`, tone: "success" }
+      };
+    }
   }
 }

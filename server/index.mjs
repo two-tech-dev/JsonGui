@@ -6,6 +6,7 @@ import { randomUUID } from "node:crypto";
 import { CatalogStore } from "./catalog-store.mjs";
 import { ProjectStore } from "./project-store.mjs";
 import { LIMITS, PROJECT_RE, ValidationError, canonicalExport, problem } from "./schema.mjs";
+import { exportDeluxeMenus } from "./deluxemenus.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, "..");
@@ -152,7 +153,26 @@ export async function createApp({ dataRoot = path.join(root, "data"), distRoot =
     if (exportPath) {
       if (request.method !== "GET") return methodNotAllowed(response, requestId);
       const { project, catalog } = await projects.export(projectId);
-      const includePrompts = new URL(request.url, "http://127.0.0.1").searchParams.get("includePrompts") !== "false";
+      const urlObj = new URL(request.url, "http://127.0.0.1");
+      const includePrompts = urlObj.searchParams.get("includePrompts") !== "false";
+      const format = urlObj.searchParams.get("format") || "json";
+      const openCommand = urlObj.searchParams.get("openCommand") || "";
+      const registerCommand = urlObj.searchParams.get("registerCommand") === "true";
+      
+      if (format === "deluxemenus") {
+        const yaml = exportDeluxeMenus(project, catalog, seed.containers, { 
+          includePrompts, 
+          openCommand, 
+          registerCommand 
+        });
+        const safeFilename = project.title.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s-]/g, "").trim().replace(/\s+/g, "-").replace(/-+/g, "-") || "menu";
+        return send(response, 200, yaml, { 
+          "Content-Type": "text/yaml; charset=utf-8", 
+          "Content-Disposition": `attachment; filename="${safeFilename}.yml"`, 
+          "Cache-Control": "no-store" 
+        });
+      }
+      
       const exported = canonicalExport(project, catalog, seed.containers, { includePrompts });
       return send(response, 200, exported, { "Content-Type": "application/json; charset=utf-8", "Content-Disposition": `attachment; filename="${projectId}.json"`, "Cache-Control": "no-store" });
     }

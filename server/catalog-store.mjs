@@ -11,7 +11,13 @@ export class CatalogStore {
     await mkdir(this.versionsDir, { recursive: true });
     const seedFile = path.join(this.versionsDir, `${this.seed.version}.json`);
     let seedCatalog;
-    try { seedCatalog = validateCatalog(await readJson(seedFile), { allowEmpty: true }); } catch { seedCatalog = validateCatalog(this.seed, { allowEmpty: true }); await atomicJson(seedFile, seedCatalog); }
+    try {
+      seedCatalog = validateCatalog(await readJson(seedFile), { allowEmpty: true });
+      if (JSON.stringify(seedCatalog) !== JSON.stringify(this.seed)) {
+        seedCatalog = validateCatalog(this.seed, { allowEmpty: true });
+        await atomicJson(seedFile, seedCatalog);
+      }
+    } catch { seedCatalog = validateCatalog(this.seed, { allowEmpty: true }); await atomicJson(seedFile, seedCatalog); }
     try {
       const current = await this.getCurrent();
       if (!current || (seedCatalog.items.length > 0 && current.catalog.items.length === 0)) await atomicJson(this.currentFile, { version: seedCatalog.version });

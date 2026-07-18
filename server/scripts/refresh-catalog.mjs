@@ -39,8 +39,14 @@ function materialFromId(id) {
   if (!/^[A-Z][A-Z0-9_]*$/.test(material)) throw new Error(`No Paper material mapping for ${id}`);
   return material;
 }
-function categoryForSource(source = "") {
-  const value = source.toLowerCase();
+function categoryForItem(id, source = "") {
+  const value = `${id} ${source}`.toLowerCase();
+  if (/(sword|axe|bow|crossbow|trident|mace|spear|shield|helmet|chestplate|leggings|boots|elytra|totem)/.test(value)) return "Combat";
+  if (/(pickaxe|shovel|hoe|shears|fishing_rod|flint_and_steel|brush|spyglass|compass|clock|lead|name_tag|map|recovery_compass)/.test(value)) return "Tools";
+  if (/(apple|bread|beef|porkchop|chicken|mutton|rabbit|cod|salmon|stew|soup|cookie|cake|carrot|potato|melon_slice|berries|chorus_fruit|honey|kelp|beetroot|rotten_flesh|pufferfish|tropical_fish)/.test(value)) return "Food";
+  if (/(redstone|repeater|comparator|piston|observer|hopper|dispenser|dropper|lever|button|pressure_plate|daylight_detector|tripwire|target|rail|tnt|sculk_sensor|calibrated_sculk|copper_bulb)/.test(value)) return "Redstone";
+  if (/(bucket|boat|minecart|chest|barrel|shulker|furnace|crafting|smithing|anvil|grindstone|loom|stonecutter|cartography|enchant|brewing|cauldron|beacon|end_crystal|ender_pearl|firework|potion|book|banner|sign|bed|music_disc|spawn_egg)/.test(value)) return "Utility";
+  if (/(block|planks|log|wood|leaves|sapling|flower|coral|glass|wool|terracotta|concrete|brick|stone|dirt|sand|gravel|ore|deepslate|cobblestone|fence|door|trapdoor|slab|stairs|wall|lantern|torch|candle|painting|item_frame|pot|carpet)/.test(value)) return "Decoration";
   if (/tool|instrument/.test(value)) return "Tools";
   if (/weapon|combat|armor/.test(value)) return "Combat";
   if (/food|edible/.test(value)) return "Food";
@@ -94,7 +100,7 @@ export function normalizeRows(rows, { minecraftVersion, revisionId, revisionTime
     if (seen.has(id)) { continue; }
     seen.add(id);
     const maxStack = Number.isInteger(row.maxStack) && row.maxStack >= 1 && row.maxStack <= 64 ? row.maxStack : defaultStackSize(id);
-    items.push({ id, name, material: row.material?.trim() || materialFromId(id), category: categoryForSource(row.category), icon: iconKey(id), maxStack, description: row.description?.trim() || name });
+    items.push({ id, name, material: row.material?.trim() || materialFromId(id), category: categoryForItem(id, row.category), icon: iconKey(id), maxStack, description: row.description?.trim() || name });
   }
   items.sort((a, b) => a.id.localeCompare(b.id));
   const stable = JSON.stringify(items);

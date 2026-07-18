@@ -1,10 +1,10 @@
-import type { CSSProperties } from "react";
+import { memo, type CSSProperties } from "react";
 
 interface PixelItemIconProps { kind: string; size?: number; label?: string; material?: string; }
 
 function hash(text: string) { return [...text].reduce((value, char) => (value * 33 + char.charCodeAt(0)) >>> 0, 5381); }
 
-export function PixelItemIcon({ kind, size = 32, label, material }: PixelItemIconProps) {
+export const PixelItemIcon = memo(function PixelItemIcon({ kind, size = 32, label, material }: PixelItemIconProps) {
   const assetName = `${kind.replace(/[./-]/g, "_")}.png`;
   const iconUrl = `/api/v1/assets/${encodeURIComponent(assetName)}`;
 
@@ -43,4 +43,4 @@ export function PixelItemIcon({ kind, size = 32, label, material }: PixelItemIco
       </svg>
     </div>
   );
-}
+});

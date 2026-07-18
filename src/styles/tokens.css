@@ -1,38 +1,43 @@
 :root {
   color-scheme: dark;
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --primitive-ink: #080b12;
-  --primitive-slate-950: #0c111b;
-  --primitive-slate-900: #111927;
-  --primitive-slate-850: #151e2e;
-  --primitive-slate-800: #1b2637;
-  --primitive-slate-750: #202c3e;
-  --primitive-slate-700: #2a384d;
-  --primitive-slate-600: #40516a;
-  --primitive-slate-500: #61738c;
-  --primitive-slate-300: #a9b7ca;
-  --primitive-slate-100: #edf3fa;
-  --primitive-emerald-500: #35d39a;
-  --primitive-emerald-400: #69e7b7;
-  --primitive-emerald-900: #103f35;
-  --primitive-blue-400: #78b7ff;
-  --primitive-amber-400: #edb45f;
-  --primitive-red-400: #f17883;
-  --surface-app: var(--primitive-slate-950);
-  --surface-canvas: var(--primitive-ink);
-  --surface-panel: var(--primitive-slate-900);
-  --surface-elevated: var(--primitive-slate-800);
-  --surface-input: #101826;
-  --border-subtle: #29384d;
-  --border-strong: #3a4d66;
-  --text-primary: var(--primitive-slate-100);
-  --text-secondary: #a9b8ca;
-  --text-tertiary: #72839b;
-  --accent-emerald: var(--primitive-emerald-500);
-  --accent-emerald-soft: rgba(53, 211, 154, .12);
-  --accent-blue: var(--primitive-blue-400);
-  --status-warning: var(--primitive-amber-400);
-  --status-error: var(--primitive-red-400);
+  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+
+  /* App Backgrounds */
+  --bg-app: #080808;
+  --bg-topbar: #0b0b0c;
+  --bg-sidebar: #0d0d0f;
+  --bg-workspace: #0a0a0b;
+
+  /* Surface Colors */
+  --surface-1: #111113;
+  --surface-2: #151517;
+  --surface-3: #1a1a1d;
+  --surface-hover: #1e1e22;
+  --surface-active: #242429;
+
+  /* Borders */
+  --border-subtle: rgba(255, 255, 255, 0.05);
+  --border-default: rgba(255, 255, 255, 0.09);
+  --border-strong: rgba(255, 255, 255, 0.15);
+
+  /* Text Colors */
+  --text-primary: #f5f5f5;
+  --text-secondary: #a3a3a3;
+  --text-muted: #707070;
+  --text-disabled: #4b4b4b;
+
+  /* Accent Colors */
+  --accent: #35d49a;
+  --accent-hover: #49dda9;
+  --accent-soft: rgba(53, 212, 154, 0.10);
+  --accent-border: rgba(53, 212, 154, 0.30);
+
+  /* Status Colors */
+  --danger: #f06a78;
+  --warning: #e6b95c;
+  --info: #6ba4e8;
+
+  /* Spacing */
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -40,11 +45,21 @@
   --space-5: 20px;
   --space-6: 24px;
   --space-8: 32px;
+
+  /* Border Radius */
   --radius-sm: 6px;
   --radius-md: 8px;
   --radius-lg: 12px;
-  --shadow-panel: 0 20px 60px rgba(0,0,0,.26);
-  --shadow-float: 0 24px 80px rgba(0,0,0,.48);
-  --focus: 0 0 0 2px var(--surface-app), 0 0 0 4px var(--accent-blue);
-  --font-mono: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+
+  /* Shadows */
+  --shadow-panel: 0 4px 20px rgba(0, 0, 0, 0.4);
+  --shadow-float: 0 16px 40px rgba(0, 0, 0, 0.48);
+  --shadow-canvas: 0 24px 80px rgba(0, 0, 0, 0.24);
+
+  /* Focus */
+  --left-sidebar-width: 240px;
+  --right-sidebar-width: 340px;
+
+  --focus: 0 0 0 2px var(--bg-app), 0 0 0 4px var(--accent-border);
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }

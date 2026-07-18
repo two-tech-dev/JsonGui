@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode, type UIEvent } from "react";
 
 interface LibraryVirtualGridProps<T> {
   items: T[];
@@ -8,11 +8,13 @@ interface LibraryVirtualGridProps<T> {
   rowHeight?: number;
 }
 
-const DEFAULT_ROW_HEIGHT = 136;
+const DEFAULT_ROW_HEIGHT = 104;
 const OVERSCAN_ROWS = 3;
 
 export function LibraryVirtualGrid<T>({ items, itemKey, renderItem, resetKey, rowHeight = DEFAULT_ROW_HEIGHT }: LibraryVirtualGridProps<T>) {
   const viewportRef = useRef<HTMLDivElement>(null);
+  const scrollFrameRef = useRef<number | null>(null);
+  const pendingScrollTopRef = useRef(0);
   const [scrollTop, setScrollTop] = useState(0);
   const [height, setHeight] = useState(520);
   const rowCount = Math.ceil(items.length / 2);
@@ -36,9 +38,22 @@ export function LibraryVirtualGrid<T>({ items, itemKey, renderItem, resetKey, ro
     return () => observer.disconnect();
   }, []);
 
-  return <div className="library-virtual-viewport" ref={viewportRef} onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}>
+  const handleScroll = (event: UIEvent<HTMLDivElement>) => {
+    pendingScrollTopRef.current = event.currentTarget.scrollTop;
+    if (scrollFrameRef.current !== null) return;
+    scrollFrameRef.current = requestAnimationFrame(() => {
+      setScrollTop(pendingScrollTopRef.current);
+      scrollFrameRef.current = null;
+    });
+  };
+
+  useEffect(() => () => {
+    if (scrollFrameRef.current !== null) cancelAnimationFrame(scrollFrameRef.current);
+  }, []);
+
+  return <div className="library-virtual-viewport" ref={viewportRef} onScroll={handleScroll}>
     <div style={{ height: rowCount * rowHeight, position: "relative" }}>
-      <div className="library-grid library-virtual-grid" style={{ position: "absolute", top: startRow * rowHeight, left: 0, right: 0 }}>
+      <div className="library-grid library-virtual-grid" style={{ position: "absolute", top: startRow * rowHeight, left: 0, right: 0, height: Math.max(0, endRow - startRow) * rowHeight, gridAutoRows: rowHeight }}>
         {visible.map((item) => <div key={itemKey(item)} className="library-virtual-card">{renderItem(item)}</div>)}
       </div>
     </div>
