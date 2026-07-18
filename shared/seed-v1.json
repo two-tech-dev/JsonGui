@@ -77,6 +77,15 @@
         "icon": "spawn_egg",
         "maxStack": 64,
         "description": "Spawn egg"
+      },
+      {
+        "id": "minecraft:diamond_sword",
+        "name": "Diamond Sword",
+        "material": "DIAMOND_SWORD",
+        "category": "Combat",
+        "icon": "diamond_sword",
+        "maxStack": 1,
+        "description": "Diamond Sword weapon"
       }
     ]
   },

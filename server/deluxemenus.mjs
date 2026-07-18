@@ -79,7 +79,7 @@ function mapActionToDeluxeMenus(action) {
     case "give_item":
       return [`[give] ${action.material || ""} ${action.amount || 1}`];
     case "teleport":
-      return [`[connect] ${action.world || ""} ${action.x || 0} ${action.y || 0} ${action.z || 0}`];
+      return []; // DeluxeMenus [connect] switches proxy server, not Minecraft coordinates.
     case "refresh":
       return ["[refresh]"];
     case "connect":
@@ -100,6 +100,9 @@ function mapActionToDeluxeMenus(action) {
 export function exportDeluxeMenus(project, catalog, containers, options = {}) {
   const issues = [];
   const usedIds = new Set();
+  const menuConfig = project.deluxeMenus ?? {};
+  const openCommand = options.openCommand ?? menuConfig.openCommand;
+  const registerCommand = options.registerCommand ?? menuConfig.registerCommand;
 
   const container = containers.find((entry) => entry.id === project.containerId);
   const byId = new Map(catalog.items.map((entry) => [entry.id, entry]));
@@ -182,6 +185,12 @@ export function exportDeluxeMenus(project, catalog, containers, options = {}) {
     if (placed.unbreakable !== undefined) {
       dmItem.unbreakable = placed.unbreakable;
     }
+    if (placed.hideAttributes !== undefined) dmItem.hide_attributes = placed.hideAttributes;
+    if (placed.hideEnchantments !== undefined) dmItem.hide_enchantments = placed.hideEnchantments;
+    if (placed.modelData !== undefined) dmItem.model_data = placed.modelData;
+    if (placed.modelDataComponent !== undefined) dmItem.model_data_component = placed.modelDataComponent;
+    if (placed.itemModel !== undefined) dmItem.item_model = placed.itemModel;
+    if (placed.enchantments !== undefined) dmItem.enchantments = placed.enchantments;
 
     if (placed.leftClickRequirement !== undefined) {
       dmItem.left_click_requirement = placed.leftClickRequirement;
@@ -235,9 +244,10 @@ export function exportDeluxeMenus(project, catalog, containers, options = {}) {
     items[itemId] = dmItem;
   }
 
-  if (options.registerCommand && !options.openCommand) {
+  if (registerCommand && !openCommand) {
     issues.push({ path: "register_command", message: "register_command is enabled but no open_command is defined.", severity: "error" });
   }
+
 
   if (issues.filter(i => i.severity === "error").length > 0) {
     throw new ValidationError("DeluxeMenus export validation failed", issues);
@@ -248,8 +258,8 @@ export function exportDeluxeMenus(project, catalog, containers, options = {}) {
   };
 
   let openCommandValue;
-  if (options.openCommand) {
-    const rawCmds = options.openCommand.split(",").map(c => c.trim()).filter(Boolean);
+  if (openCommand) {
+    const rawCmds = openCommand.split(",").map(c => c.trim()).filter(Boolean);
     const uniqueCmds = Array.from(new Set(rawCmds));
     if (uniqueCmds.length > 1) {
       openCommandValue = uniqueCmds;
@@ -270,9 +280,10 @@ export function exportDeluxeMenus(project, catalog, containers, options = {}) {
     doc.open_command = openCommandValue;
   }
 
-  if (options.registerCommand) {
+  if (registerCommand) {
     doc.register_command = true;
   }
+  if (menuConfig.updateInterval !== undefined) doc.update_interval = menuConfig.updateInterval;
 
   if (inventoryType) {
     doc.inventory_type = inventoryType;
@@ -282,16 +293,16 @@ export function exportDeluxeMenus(project, catalog, containers, options = {}) {
     doc.size = size;
   }
 
-  if (project.openCommands) {
-    doc.open_commands = project.openCommands;
+  if (menuConfig.openCommands) {
+    doc.open_commands = menuConfig.openCommands;
   }
 
-  if (project.closeCommands) {
-    doc.close_commands = project.closeCommands;
+  if (menuConfig.closeCommands) {
+    doc.close_commands = menuConfig.closeCommands;
   }
 
-  if (project.openRequirement) {
-    doc.open_requirement = project.openRequirement;
+  if (menuConfig.openRequirement) {
+    doc.open_requirement = menuConfig.openRequirement;
   }
 
   // Use menuId to satisfy ESLint

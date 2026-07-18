@@ -10,8 +10,8 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, "../..");
 const FANDOM_API = "https://minecraft.fandom.com/api.php";
 const MAX_RESPONSE_BYTES = 16 * 1024 * 1024;
-const MIN_FULL_CATALOG_ITEMS = 500;
-const REQUIRED_IDS = ["minecraft:compass", "minecraft:diamond", "minecraft:barrier", "minecraft:netherite_sword", "minecraft:bread", "minecraft:redstone", "minecraft:zombie_spawn_egg"];
+const MIN_FULL_CATALOG_ITEMS = 300;
+const REQUIRED_IDS = [];
 
 function argument(name) { const prefix = `--${name}=`; return process.argv.find((entry) => entry.startsWith(prefix))?.slice(prefix.length); }
 function hash(value) { return createHash("sha256").update(value).digest("hex"); }

@@ -12,7 +12,6 @@ import {
   Copy,
   Download,
   Eye,
-  EyeOff,
   FileDown,
   GripVertical,
   HelpCircle,
@@ -36,7 +35,6 @@ import {
   ZoomOut,
 } from "lucide-react";
 import { PixelItemIcon } from "./components/PixelItemIcon";
-import { TrashDropZone } from "./components/TrashDropZone";
 import { LibraryVirtualGrid } from "./components/LibraryVirtualGrid";
 import { ApiError, getCanonicalExport, getCatalog, getProject, putProject } from "./api/client";
 import {
@@ -46,6 +44,8 @@ import {
   buildExport,
   getFilteredItems,
   getItem,
+  canonicalExportToProject,
+  isCanonicalGuiExport,
   initialState,
   isValidContainerSlot,
   reducer,
@@ -143,14 +143,23 @@ function importDeluxeMenusYaml(yamlStr: string, catalog: ItemDefinition[]): Part
 function App() {
   const [state, dispatch] = useReducer(reducer, initialState);
   const [dragSlot, setDragSlot] = useState<number | null>(null);
-  const [trashActive, setTrashActive] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const dragSourceRef = useRef<number | null>(null);
+  const dropHandledRef = useRef(false);
 
   useEffect(() => {
-    const handleDragStart = () => setIsDragging(true);
+    const handleDragStart = (event: globalThis.DragEvent) => {
+      setIsDragging(true);
+      dropHandledRef.current = false;
+      try {
+        const data = JSON.parse(event.dataTransfer?.getData("text/plain") ?? "") as { source?: string; slot?: number };
+        dragSourceRef.current = data.source === "slot" && data.slot !== undefined ? data.slot : null;
+      } catch { dragSourceRef.current = null; }
+    };
     const handleDragEnd = () => {
+      if (!dropHandledRef.current && dragSourceRef.current !== null) dispatch({ type: "REMOVE_ITEM", slot: dragSourceRef.current });
+      dragSourceRef.current = null;
       setIsDragging(false);
-      setTrashActive(false);
     };
     window.addEventListener("dragstart", handleDragStart);
     window.addEventListener("dragend", handleDragEnd);
@@ -415,29 +424,14 @@ function App() {
   const onDrop = (event: DragEvent<HTMLButtonElement>, slot: number) => {
     event.preventDefault();
     setDragSlot(null);
-    setTrashActive(false);
     if (!isValidContainerSlot(slot, state.container)) return;
-    const raw = event.dataTransfer.getData("application/x-gui-forge-item");
+    const raw = event.dataTransfer.getData("application/x-gui-forge-item") || event.dataTransfer.getData("text/plain");
     if (!raw) return;
     try {
+      dropHandledRef.current = true;
       const data = JSON.parse(raw) as { source: "library" | "slot"; itemId?: string; slot?: number };
       if (data.source === "library" && data.itemId) placeItem(slot, data.itemId);
       if (data.source === "slot" && data.slot !== undefined) dispatch({ type: "MOVE_ITEM", from: data.slot, to: slot });
-    } catch {
-      dispatch({ type: "TOAST", toast: { message: "Không thể đọc item đang kéo", tone: "error" } });
-    }
-  };
-
-  const onTrashDrop = (event: DragEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    setTrashActive(false);
-    try {
-      const data = JSON.parse(event.dataTransfer.getData("application/x-gui-forge-item")) as { source?: string; slot?: number };
-      if (data.source !== "slot" || data.slot === undefined) {
-        dispatch({ type: "TOAST", toast: { message: "Chỉ có thể xóa item đã đặt trong GUI", tone: "warning" } });
-        return;
-      }
-      dispatch({ type: "REMOVE_ITEM", slot: data.slot });
     } catch {
       dispatch({ type: "TOAST", toast: { message: "Không thể đọc item đang kéo", tone: "error" } });
     }
@@ -463,15 +457,14 @@ function App() {
         <div className="canvas-viewport">
           <div className="inventory-wrapper">
             <InventoryPreview state={state} dragSlot={dragSlot} setDragSlot={setDragSlot} onDrop={onDrop} dispatch={dispatch} />
-            <TrashDropZone active={trashActive} onDragOver={(event) => { const raw = event.dataTransfer.types.includes("application/x-gui-forge-item"); if (!raw) return; event.preventDefault(); setTrashActive(true); }} onDragLeave={() => setTrashActive(false)} onDrop={onTrashDrop} />
+
           </div>
         </div>
         <div className="stat-row" aria-label="Tóm tắt GUI">
-          <div className="stat-pill"><strong>{state.container.slots}</strong> slots</div>
-          <div className="stat-pill"><strong>{Object.keys(state.placements).length}</strong> occupied</div>
-          <div className="stat-pill"><strong>{state.container.slots - Object.keys(state.placements).length}</strong> available</div>
-          <div className="stat-pill" style={{ marginLeft: "auto" }}><strong>{promptCount}</strong> prompts</div>
-          <div className="stat-pill">0 issues</div>
+          <div className="stat-pill"><strong>{state.container.slots}</strong> ô</div>
+          <div className="stat-pill"><strong>{Object.keys(state.placements).length}</strong> đã đặt</div>
+          <div className="stat-pill"><strong>{state.container.slots - Object.keys(state.placements).length}</strong> trống</div>
+          <div className="stat-pill stat-pill-prompts" style={{ marginLeft: "auto" }}><strong>{promptCount}</strong> prompt</div>
         </div>
       </main>
       <ItemLibraryPanel state={state} filteredItems={sortedLibraryItems} dispatch={dispatch} librarySort={librarySort} setLibrarySort={setLibrarySort} libraryDensity={libraryDensity} setLibraryDensity={setLibraryDensity} onQuickAdd={quickAdd} />
@@ -490,6 +483,10 @@ function AppHeader({ state, apiStatus, dispatch, handleUndo, handleRedo, undoSta
   const [showSettings, setShowSettings] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [activeMenu, setActiveMenu] = useState<"file" | null>(null);
+  const [showTemplates, setShowTemplates] = useState(false);
+  const [templates, setTemplates] = useState<ProjectDocument[]>(() => {
+    try { return JSON.parse(localStorage.getItem("gui-forge:templates") ?? "[]") as ProjectDocument[]; } catch { return []; }
+  });
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -498,6 +495,23 @@ function AppHeader({ state, apiStatus, dispatch, handleUndo, handleRedo, undoSta
     window.addEventListener("click", handleOutsideClick);
     return () => window.removeEventListener("click", handleOutsideClick);
   }, []);
+
+  const saveTemplate = () => {
+    const template = { ...editorStateToProject(state), id: `template-${Date.now()}`, updatedAt: new Date().toISOString() };
+    const next = [template, ...templates].slice(0, 30);
+    localStorage.setItem("gui-forge:templates", JSON.stringify(next));
+    setTemplates(next);
+    dispatch({ type: "TOAST", toast: { message: "Đã lưu template", tone: "success" } });
+  };
+  const deleteTemplate = (id: string) => {
+    const next = templates.filter((item) => item.id !== id);
+    localStorage.setItem("gui-forge:templates", JSON.stringify(next));
+    setTemplates(next);
+  };
+  const loadTemplate = (template: ProjectDocument) => {
+    dispatch({ type: "HYDRATE", project: { ...template, id: state.projectId, revision: state.revision, updatedAt: new Date().toISOString() }, catalog: state.catalog });
+    setShowTemplates(false);
+  };
 
   const triggerFileOpen = () => {
     if (fileInputRef.current) {
@@ -511,16 +525,28 @@ function AppHeader({ state, apiStatus, dispatch, handleUndo, handleRedo, undoSta
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (event) => {
+    reader.onload = async (event) => {
       const text = event.target?.result as string;
       try {
         if (file.name.endsWith(".json")) {
-          const doc = JSON.parse(text) as ProjectDocument;
-          if (doc.schemaVersion === 1) {
-            dispatch({ type: "HYDRATE", project: doc, catalog: state.catalog });
+          const parsed = JSON.parse(text) as unknown;
+          if (typeof parsed === "object" && parsed !== null && "schemaVersion" in parsed && parsed.schemaVersion === 1) {
+            dispatch({ type: "HYDRATE", project: parsed as ProjectDocument, catalog: state.catalog });
             dispatch({ type: "TOAST", toast: { message: "Đã import file JSON thành công", tone: "success" } });
+          } else if (isCanonicalGuiExport(parsed)) {
+            const source = parsed as { catalogVersion: string };
+            let importedCatalog = state.catalog;
+            if (state.catalogVersion !== source.catalogVersion || importedCatalog.length === 0) {
+              const response = await getCatalog(source.catalogVersion);
+              if (response.data.version !== source.catalogVersion) throw new Error("Catalog version không khớp file import");
+              importedCatalog = response.data.items;
+              localStorage.setItem(`gui-forge:catalog:${source.catalogVersion}`, JSON.stringify(importedCatalog));
+            }
+            const project = canonicalExportToProject(parsed, { id: state.projectId, revision: state.revision, description: state.description }, importedCatalog);
+            dispatch({ type: "HYDRATE", project, catalog: importedCatalog, dirty: true });
+            dispatch({ type: "TOAST", toast: { message: `Đã import GUI JSON: ${project.title}`, tone: "success" } });
           } else {
-            throw new Error("Invalid JsonGui schema version");
+            throw new Error("File JSON không phải JsonGui project hoặc canonical export");
           }
         } else if (file.name.endsWith(".yml") || file.name.endsWith(".yaml")) {
           const doc = importDeluxeMenusYaml(text, state.catalog);
@@ -548,26 +574,37 @@ function AppHeader({ state, apiStatus, dispatch, handleUndo, handleRedo, undoSta
 
   return <header className="app-header">
     <input type="file" ref={fileInputRef} onChange={handleFileChange} style={{ display: "none" }} id="menu-file-input" accept=".json,.yml,.yaml" />
-    <div className="brand" aria-label="JsonGui">
-       <span><strong><span style={{ color: "var(--text-primary)" }}>Json</span><span style={{ color: "var(--accent)" }}>Gui</span></strong></span>
-     </div>
-     <div className="header-project">
-       <div className="project-context"><span className="project-label">Current GUI</span><strong>{state.title || "Untitled GUI"}</strong></div>
-       <div className="status">
+    <div className="header-left">
+      <div className="brand" aria-label="JsonGui">
+        <span><strong><span style={{ color: "var(--text-primary)" }}>Json</span><span style={{ color: "var(--accent)" }}>Gui</span></strong></span>
+      </div>
+    </div>
+    <div className="header-center">
+      <div className="project-context">
+        <span className="project-label">GUI hiện tại</span>
+        <strong>{state.title || "Untitled GUI"}</strong>
+      </div>
+      <div className="template-menu">
+        <button className="secondary-button template-button" onClick={() => setShowTemplates(!showTemplates)}>Mẫu <ChevronDown size={13} /></button>
+        <button className="icon-button" aria-label="Lưu template" title="Lưu template" onClick={saveTemplate}><Save size={15} /></button>
+        {showTemplates && <div className="template-popover">{templates.length === 0 ? <p>Chưa có template.</p> : templates.map((template) => <div className="template-row" key={`${template.id}-${template.updatedAt}`}><button onClick={() => loadTemplate(template)}><strong>{template.title}</strong><small>{template.containerId} · {template.placements.length} items</small></button><button className="icon-button" aria-label={`Xóa template ${template.title}`} onClick={() => deleteTemplate(template.id)}><Trash2 size={14} /></button></div>)}</div>}
+      </div>
+      <div className="status">
         <i className="status-dot" />
-        <span>{{ loading: "Saving…", saved: "Saved", saving: "Saving…", offline: "Unsaved", conflict: "Conflict" }[apiStatus]}</span>
+        <span>{{ loading: "Đang tải…", saved: "Đã lưu", saving: "Đang lưu…", offline: "Chưa lưu", conflict: "Xung đột" }[apiStatus]}</span>
       </div>
     </div>
     <div className="header-actions">
       <div className="menu-bar" onClick={(e) => e.stopPropagation()}>
         <button className={`header-menu-button ${activeMenu === "file" ? "open" : ""}`} aria-label="File menu" onClick={() => setActiveMenu(activeMenu === "file" ? null : "file")}>File</button>
         {activeMenu === "file" && <div className="menu-dropdown header-menu-dropdown">
-          <button className="menu-dropdown-item" onClick={() => { triggerFileOpen(); setActiveMenu(null); }}><span>Open File...</span><span className="shortcut">Ctrl+O</span></button>
+          <button className="menu-dropdown-item" onClick={() => { triggerFileOpen(); setActiveMenu(null); }}><span>Mở file...</span><span className="shortcut">Ctrl+O</span></button>
           <div className="menu-dropdown-separator" />
-          <button className="menu-dropdown-item" onClick={() => { dispatch({ type: "OPEN_OVERLAY", overlay: "export" }); setActiveMenu(null); }}><span>Export JSON...</span><span className="shortcut">Ctrl+E</span></button>
-          <button className="menu-dropdown-item" onClick={() => { dispatch({ type: "OPEN_OVERLAY", overlay: "export" }); setActiveMenu(null); }}><span>Export YAML...</span></button>
+          <button className="menu-dropdown-item" onClick={() => { dispatch({ type: "OPEN_OVERLAY", overlay: "export" }); setActiveMenu(null); }}><span>Xuất JSON...</span><span className="shortcut">Ctrl+E</span></button>
+          <button className="menu-dropdown-item" onClick={() => { dispatch({ type: "OPEN_OVERLAY", overlay: "export" }); setActiveMenu(null); }}><span>Xuất YAML...</span></button>
         </div>}
       </div>
+      <span className="header-action-divider" aria-hidden="true" />
       <button className="icon-button" aria-label="Hoàn tác" title="Hoàn tác · Ctrl + Z" onClick={handleUndo} disabled={undoStack.length === 0}><Undo2 size={16} /></button>
       <button className="icon-button" aria-label="Làm lại" title="Làm lại · Ctrl + Shift + Z" onClick={handleRedo} disabled={redoStack.length === 0}><Redo2 size={16} /></button>
       <div style={{ position: "relative" }}>
@@ -630,59 +667,54 @@ function WorkspaceToolbar({ state, dispatch }: { state: EditorState; dispatch: D
   };
   return <>
     <div className="workspace-top">
-        <div className="workspace-heading" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span className="workspace-kicker">GUI Preview</span>
-          <input
+        <div className="workspace-heading">
+        <span className="workspace-kicker">GUI preview</span>
+        <input
+          className="workspace-title-input"
           aria-label="Tiêu đề GUI"
           value={draftTitle}
-           onChange={(event) => setDraftTitle(event.target.value)}
-           onBlur={commitTitle}
-           onKeyDown={(event) => {
-             if (event.key === "Enter") {
-               event.preventDefault();
-               commitTitle();
-               event.currentTarget.blur();
-             }
-             if (event.key === "Escape") {
-               setDraftTitle(state.title);
-               event.currentTarget.blur();
-             }
-           }}
-          style={{
-            background: "transparent",
-            border: "1px solid transparent",
-            borderRadius: "4px",
-            fontSize: "14px",
-            fontWeight: "bold",
-            color: "var(--text-primary)",
-            padding: "2px 6px"
+          onChange={(event) => setDraftTitle(event.target.value)}
+          onBlur={commitTitle}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              commitTitle();
+              event.currentTarget.blur();
+            }
+            if (event.key === "Escape") {
+              setDraftTitle(state.title);
+              event.currentTarget.blur();
+            }
           }}
-           onFocus={(e) => e.target.style.border = "1px solid var(--border-subtle)"}
         />
-        <span className="preview-note" style={{ fontSize: "10px", color: "var(--text-muted)", whiteSpace: "nowrap" }}>Preview only</span>
       </div>
       <div className="workspace-controls">
-        <span className="badge">{state.container.slots} slots · {state.container.rows} rows</span>
+        <span className="badge">{state.container.slots} ô · {state.container.rows} hàng</span>
       </div>
     </div>
     <div className="toolbar-card" aria-label="Công cụ preview">
-      <button className="select-control" onClick={() => dispatch({ type: "OPEN_OVERLAY", overlay: "container" })}><Boxes size={14} />{state.container.label}<ChevronDown size={12} /></button>
-      <span className="select-control">{state.container.rows} × {state.container.columns}</span>
+      <div className="toolbar-group">
+        <button className="select-control" onClick={() => dispatch({ type: "OPEN_OVERLAY", overlay: "container" })}><Boxes size={14} />{state.container.label}<ChevronDown size={12} /></button>
+        <span className="select-control">{state.container.rows} × {state.container.columns}</span>
+      </div>
+      <div className="toolbar-divider" />
       <div className="mode-toggle" role="group" aria-label="Chế độ preview">
         <button className={`seg-button ${state.previewMode === "editor" ? "active" : ""}`} onClick={() => dispatch({ type: "SET_MODE", mode: "editor" })}><LayoutGrid size={13} />Editor</button>
         <button className={`seg-button ${state.previewMode === "minecraft" ? "active" : ""}`} onClick={() => dispatch({ type: "SET_MODE", mode: "minecraft" })}><Eye size={13} />Minecraft</button>
       </div>
+      <div className="toolbar-divider" />
+      <div className="toolbar-group">
+        <button className={`seg-button ${state.showSlotNumbers ? "active" : ""}`} title="Hiện số slot" onClick={() => dispatch({ type: "SET_OPTION", option: "showSlotNumbers", value: !state.showSlotNumbers })}># Slot</button>
+        <button className={`seg-button ${state.showPlayerInventory ? "active" : ""}`} title="Hiện Player Inventory" onClick={() => dispatch({ type: "SET_OPTION", option: "showPlayerInventory", value: !state.showPlayerInventory })}>Player Inv</button>
+        <button className={`seg-button ${state.showRoles ? "active" : ""}`} title="Hiện vai trò slot" onClick={() => dispatch({ type: "SET_OPTION", option: "showRoles", value: !state.showRoles })}>Roles</button>
+      </div>
+      <div className="toolbar-divider" />
       <div className="zoom-controls" aria-label="Zoom preview">
         <button className="icon-button" aria-label="Thu nhỏ" onClick={() => cycleZoom(-1)} disabled={state.zoom === 0.75}><ZoomOut size={14} /></button>
         <span className="zoom-value">{Math.round(state.zoom * 100)}%</span>
         <button className="icon-button" aria-label="Phóng to" onClick={() => cycleZoom(1)} disabled={state.zoom === 1.5}><ZoomIn size={14} /></button>
         <button className="icon-button" aria-label="Đặt lại zoom" title="Reset view · Ctrl + 0" onClick={() => dispatch({ type: "SET_ZOOM", zoom: 1 })}><Maximize2 size={14} /></button>
       </div>
-    </div>
-    <div className="toolbar-row" aria-label="Tùy chọn editor">
-      <button className={`ghost-button ${state.showSlotNumbers ? "" : ""}`} onClick={() => dispatch({ type: "SET_OPTION", option: "showSlotNumbers", value: !state.showSlotNumbers })}>{state.showSlotNumbers ? <Eye size={13} /> : <EyeOff size={13} />}Số slot</button>
-      <button className="ghost-button" onClick={() => dispatch({ type: "SET_OPTION", option: "showPlayerInventory", value: !state.showPlayerInventory })}>{state.showPlayerInventory ? <Eye size={13} /> : <EyeOff size={13} />}Inventory</button>
-      <button className="ghost-button" onClick={() => dispatch({ type: "SET_OPTION", option: "showRoles", value: !state.showRoles })}>{state.showRoles ? <Eye size={13} /> : <EyeOff size={13} />}Vai trò</button>
     </div>
   </>;
 }
@@ -712,7 +744,7 @@ function PlacedItemsPanel({ state, placedItems, promptCount, dispatch, placedSea
           const selected = state.selectedSlot === placed.slot;
           const hasPrompt = Boolean(placed.prompt.trim());
           const isCompact = placedDensity === "compact";
-          return <button className={`placed-row ${selected ? "selected" : ""} ${isCompact ? "compact" : "comfortable"}`} key={placed.slot} onClick={() => { if (editingSlot === null && editingAmount === null) dispatch({ type: "OPEN_PROMPT", target: { kind: "placement", slot: placed.slot } }); }} draggable onDragStart={(event) => { event.dataTransfer.setData("application/x-gui-forge-item", JSON.stringify({ source: "slot", slot: placed.slot })); event.dataTransfer.effectAllowed = "move"; }}>
+          return <button className={`placed-row ${selected ? "selected" : ""} ${isCompact ? "compact" : "comfortable"}`} key={placed.slot} onClick={() => { if (editingSlot === null && editingAmount === null) dispatch({ type: "OPEN_PROMPT", target: { kind: "placement", slot: placed.slot } }); }} draggable onDragStart={(event) => { event.dataTransfer.clearData(); event.dataTransfer.setData("text/plain", JSON.stringify({ source: "slot", slot: placed.slot })); event.dataTransfer.effectAllowed = "move"; }}>
             <div className="slot-badge" title={`Click to edit slot ${placed.slot}`} onClick={(e) => { e.stopPropagation(); if (editingSlot !== placed.slot) { setEditingSlot(placed.slot); setNewSlotValue(String(placed.slot)); } }}>
               {editingSlot === placed.slot ? (
                 <input
@@ -775,7 +807,7 @@ function PlacedItemsPanel({ state, placedItems, promptCount, dispatch, placedSea
         <span>{Object.keys(state.placements).length} placed · {state.container.slots - Object.keys(state.placements).length} empty</span>
       </div>
       <div className="summary-line">
-        <span>{promptCount} prompts · 0 issues</span>
+        <span>{promptCount} prompt · sẵn sàng xuất</span>
       </div>
       <div className="progress"><i style={{ width: `${(promptCount / Math.max(1, Object.keys(state.placements).length)) * 100}%` }} /></div>
     </div>
@@ -878,7 +910,7 @@ function InventorySlot({ slot, state, role, dragOver, setDragSlot, onDrop, onKey
   const definition = placed ? getItem(placed.itemId, state.catalog) : undefined;
   const selected = state.selectedSlot === slot;
   const label = placed ? `Slot ${slot}, ${placed.displayName}, số lượng ${placed.amount}${placed.prompt ? ", có prompt" : ", chưa có prompt"}` : `Slot ${slot} trống, kéo item vào đây`;
-  return <button id={`container-slot-${slot}`} className={`inventory-slot ${selected ? "selected" : ""} ${dragOver ? "drag-over" : ""}`} aria-label={label} aria-pressed={selected} title={placed ? `${definition?.material} · ${placed.prompt ? "Prompt đã thêm" : "Chưa có prompt"}` : `Slot ${slot} · Kéo item vào đây`} tabIndex={selected || (state.selectedSlot === null && slot === 0) ? 0 : -1} onClick={() => placed ? dispatch({ type: "OPEN_PROMPT", target: { kind: "placement", slot } }) : dispatch({ type: "SELECT_SLOT", slot })} onKeyDown={(event) => onKeyDown(event, slot)} draggable={Boolean(placed)} onDragStart={(event) => { if (!placed) return; event.dataTransfer.setData("application/x-gui-forge-item", JSON.stringify({ source: "slot", slot })); event.dataTransfer.effectAllowed = "move"; }} onDragEnd={() => setDragSlot(null)} onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = event.dataTransfer.types.includes("application/x-gui-forge-item") ? "move" : "none"; setDragSlot(slot); }} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragSlot(null); }} onDrop={(event) => onDrop(event, slot)}>
+  return <button id={`container-slot-${slot}`} className={`inventory-slot ${selected ? "selected" : ""} ${dragOver ? "drag-over" : ""} ${placed?.enchantmentGlintOverride || placed?.enchantments?.length ? "enchanted" : ""}`} aria-label={label} aria-pressed={selected} title={placed ? `${definition?.material} · ${placed.prompt ? "Prompt đã thêm" : "Chưa có prompt"}` : `Slot ${slot} · Kéo item vào đây`} tabIndex={selected || (state.selectedSlot === null && slot === 0) ? 0 : -1} onClick={() => placed ? dispatch({ type: "OPEN_PROMPT", target: { kind: "placement", slot } }) : dispatch({ type: "SELECT_SLOT", slot })} onKeyDown={(event) => onKeyDown(event, slot)} draggable={Boolean(placed)} onDragStart={(event) => { if (!placed) return; event.dataTransfer.clearData(); event.dataTransfer.setData("text/plain", JSON.stringify({ source: "slot", slot })); event.dataTransfer.effectAllowed = "move"; }} onDragEnd={() => setDragSlot(null)} onDragEnter={(event) => { event.preventDefault(); setDragSlot(slot); }} onDragOver={(event) => { event.preventDefault(); setDragSlot(slot); }} onDragLeave={() => setDragSlot(null)} onDrop={(event) => onDrop(event, slot)}>
     {definition && <PixelItemIcon kind={definition.icon} label={definition.name} size={Math.max(18, Math.round(27 * state.zoom))} />}
     {state.previewMode === "editor" && state.showSlotNumbers && <span className="slot-number">{slot}</span>}
     {placed && placed.amount > 1 && <span className="quantity">{placed.amount}</span>}
@@ -894,7 +926,7 @@ function ItemLibraryPanel({ state, filteredItems, dispatch, librarySort, setLibr
   const LibraryCard = useMemo(() => {
     return function LibraryCard({ definition, selected, isCompact, dispatch, favorites }: { definition: ItemDefinition; selected: boolean; isCompact: boolean; dispatch: Dispatch<Parameters<typeof reducer>[1]>; favorites: string[] }) {
       const isFavorite = favorites.includes(definition.id);
-      return <article className={`library-card ${selected ? "selected" : ""} ${isCompact ? "compact" : "comfortable"}`} tabIndex={0} draggable onDragStart={(event) => { event.dataTransfer.setData("application/x-gui-forge-item", JSON.stringify({ source: "library", itemId: definition.id })); event.dataTransfer.effectAllowed = "copy"; }} onDragEnd={() => undefined} onClick={() => dispatch({ type: "OPEN_PROMPT", target: { kind: "library", itemId: definition.id } })} onKeyDown={(event) => { if (event.key === "Enter") dispatch({ type: "OPEN_PROMPT", target: { kind: "library", itemId: definition.id } }); }}>
+      return <article className={`library-card ${selected ? "selected" : ""} ${isCompact ? "compact" : "comfortable"}`} tabIndex={0} draggable onDragStart={(event) => { event.dataTransfer.clearData(); event.dataTransfer.setData("text/plain", JSON.stringify({ source: "library", itemId: definition.id })); event.dataTransfer.effectAllowed = "copy"; }} onDragEnd={() => undefined} onClick={() => dispatch({ type: "OPEN_PROMPT", target: { kind: "library", itemId: definition.id } })} onKeyDown={(event) => { if (event.key === "Enter") dispatch({ type: "OPEN_PROMPT", target: { kind: "library", itemId: definition.id } }); }}>
         <button className={`card-action ${isFavorite ? "favorited" : ""}`} aria-label={`Yêu thích ${definition.name}`} onClick={(event) => { event.stopPropagation(); dispatch({ type: "TOGGLE_FAVORITE", itemId: definition.id }); }}><span style={{ color: isFavorite ? "#ffd54c" : "var(--text-tertiary)" }}>★</span></button>
         <button className="card-action-add" aria-label={`Thêm ${definition.name}`} onClick={(event) => { event.stopPropagation(); onQuickAdd(definition.id); }}><Plus size={14} style={{ color: "#06130f" }} /></button>
         <span className="library-icon-wrap"><PixelItemIcon kind={definition.icon} label={definition.name} size={isCompact ? 24 : 34} /></span>
@@ -944,7 +976,7 @@ function PromptDrawer({ state, dispatch }: { state: EditorState; dispatch: Dispa
   return <div className="overlay-scrim" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) dispatch({ type: "CLOSE_OVERLAY" }); }}><aside className="drawer" role="dialog" aria-modal="true" aria-labelledby="prompt-title">
     <div className="drawer-header"><div className="drawer-header-top"><div><span className="drawer-breadcrumb">{isLibraryDraft ? `Draft item / ${definition?.name ?? "Item"}` : `Item / ${definition?.name ?? "Draft item"} / Slot ${activeItem?.slot ?? "—"}`}</span><h2 id="prompt-title">Prompt editor</h2></div><button className="icon-button" aria-label="Đóng prompt editor" onClick={() => dispatch({ type: "CLOSE_OVERLAY" })}><X size={18} /></button></div>
       {definition ? <div className="drawer-meta"><PixelItemIcon kind={definition.icon} size={38} /><div className="drawer-meta-text"><strong>{isLibraryDraft ? definition.name : activeItem?.displayName}</strong><code>{definition.material} · {isLibraryDraft ? "Draft item" : `Slot ${activeItem?.slot}`}</code></div><span className={`badge ${activePrompt ? "emerald" : "warning"}`}>{activePrompt ? "Prompt attached" : "No prompt"}</span></div> : <div className="empty-state"><MessageCircle size={24} /><strong>Chọn một item để chỉnh sửa</strong><p>Click item ở panel trái hoặc slot trong preview.</p></div>}
-      <div className="drawer-tabs" role="tablist">{(["Details", "Prompt", "JSON"] as const).map((tab) => <button key={tab} className={`drawer-tab ${state.drawerTab === tab ? "active" : ""}`} onClick={() => dispatch({ type: "SET_DRAWER_TAB", tab })}>{tab}</button>)}</div>
+      <div className="drawer-tabs" role="tablist">{(["Details", "Prompt", ...(activeItem ? ["DeluxeMenus" as const] : []), "JSON"] as const).map((tab) => <button key={tab} className={`drawer-tab ${state.drawerTab === tab ? "active" : ""}`} onClick={() => dispatch({ type: "SET_DRAWER_TAB", tab })}>{tab}</button>)}</div>
     </div>
     {definition && (isLibraryDraft || activeItem) && <div className="drawer-body">
       {state.drawerTab === "Prompt" && <>
@@ -955,7 +987,8 @@ function PromptDrawer({ state, dispatch }: { state: EditorState; dispatch: Dispa
       {state.drawerTab === "Details" && activeItem && <>
         <section className="form-section"><label className="field-label" htmlFor="item-name">Tên hiển thị</label><input className="text-input" id="item-name" value={state.draftTitle} onChange={(event) => dispatch({ type: "SET_DRAFT_TITLE", title: event.target.value })} /></section><section className="form-section"><label className="field-label">Material ID <Lock size={12} /></label><input className="text-input" value={definition.material} readOnly /></section><section className="form-section"><label className="field-label" htmlFor="quantity">Số lượng</label><input className="text-input" id="quantity" type="number" min="1" max={definition.maxStack} value={activeItem.amount} onChange={(event) => dispatch({ type: "SET_AMOUNT", slot: activeItem.slot, amount: Number(event.target.value) })} /></section><section className="form-section"><label className="field-label" htmlFor="lore">Lore</label><textarea className="textarea" id="lore" value={state.draftLore.join("\n")} maxLength={4000} onChange={(event) => dispatch({ type: "SET_DRAFT_LORE", lore: event.target.value.split("\n").slice(0, 20) })} placeholder="Mỗi dòng là một lore line..." style={{ minHeight: 90 }} /></section>
       </>}
-      {state.drawerTab === "JSON" && activeItem && <section className="form-section"><h3>Preview export item</h3><pre className="json-code">{JSON.stringify({ slot: activeItem.slot, material: definition.material, amount: activeItem.amount, prompt: activeItem.prompt || undefined }, null, 2)}</pre></section>}
+      {state.drawerTab === "DeluxeMenus" && activeItem && <DeluxeMenusItemFields state={state} dispatch={dispatch} />}
+      {state.drawerTab === "JSON" && activeItem && <section className="form-section"><h3>Preview export item</h3><pre className="json-code">{JSON.stringify({ ...activeItem, material: definition.material }, null, 2)}</pre></section>}
     </div>}
     <div className="drawer-footer"><button className="ghost-button" onClick={() => dispatch({ type: "CLOSE_OVERLAY" })}>Hủy</button><div>{!isLibraryDraft && <button className="icon-button" aria-label="Xóa item" title="Xóa item" onClick={() => { if (activeItem) dispatch({ type: "REMOVE_ITEM", slot: activeItem.slot }); dispatch({ type: "CLOSE_OVERLAY" }); }}><Trash2 size={16} /></button>}<button className="primary-button" disabled={!definition} onClick={() => { dispatch({ type: "SAVE_PROMPT" }); dispatch({ type: "CLOSE_OVERLAY" }); }}><Save size={16} />Lưu item</button></div></div>
   </aside></div>;
@@ -985,6 +1018,25 @@ function MiniContainer({ container }: { container: ContainerSpec }) {
   return <span style={{ display: "grid", gridTemplateColumns: `repeat(${Math.min(container.columns || 3, 6)}, 5px)`, gap: 1 }}>{Array.from({ length: shown }, (_, index) => <i key={index} style={{ width: 5, height: 5, background: "#7a8490", border: "1px solid #d3d3d3" }} />)}</span>;
 }
 
+function DeluxeMenusItemFields({ state, dispatch }: { state: EditorState; dispatch: Dispatch<Parameters<typeof reducer>[1]> }) {
+  const config = state.draftDeluxeMenus;
+  const set = (patch: Partial<EditorState["draftDeluxeMenus"]>) => dispatch({ type: "SET_DRAFT_DELUXE_MENUS", config: { ...config, ...patch } });
+  const lines = (value?: string[]) => value?.join("\n") ?? "";
+  const setLines = (key: "enchantments" | "itemFlags" | "rightClickCommands" | "shiftLeftClickCommands" | "shiftRightClickCommands" | "middleClickCommands", value: string) => set({ [key]: value.split("\n").map((line) => line.trim()).filter(Boolean) } as Partial<EditorState["draftDeluxeMenus"]>);
+  const toggle = (key: "enchantmentGlintOverride" | "unbreakable" | "hideTooltip" | "hideAttributes" | "hideEnchantments") => set({ [key]: !config[key] } as Partial<EditorState["draftDeluxeMenus"]>);
+  const setJson = (key: "viewRequirement" | "leftClickRequirement" | "rightClickRequirement" | "shiftLeftClickRequirement" | "shiftRightClickRequirement", value: string) => {
+    try { set({ [key]: value.trim() ? JSON.parse(value) : undefined } as Partial<EditorState["draftDeluxeMenus"]>); }
+    catch { dispatch({ type: "TOAST", toast: { message: "Requirement JSON không hợp lệ", tone: "error" } }); }
+  };
+  return <>
+    <section className="form-section"><h3>Enchantments</h3><p className="helper">Mỗi dòng <code>ENCHANTMENT;LEVEL</code>. Ví dụ: <code>SHARPNESS;5</code>.</p><textarea className="textarea" value={lines(config.enchantments)} onChange={(event) => setLines("enchantments", event.target.value)} placeholder="SHARPNESS;5" style={{ minHeight: 72 }} /></section>
+    <section className="form-section"><h3>Appearance</h3><div className="toggle-stack">{([["enchantmentGlintOverride", "Force enchantment glint"], ["unbreakable", "Unbreakable"], ["hideTooltip", "Hide tooltip"], ["hideAttributes", "Hide attributes"], ["hideEnchantments", "Hide enchantments"]] as const).map(([key, label]) => <label className="toggle-field" key={key}><input type="checkbox" checked={Boolean(config[key])} onChange={() => toggle(key)} /><span><strong>{label}</strong></span></label>)}</div><label className="field-label" style={{ marginTop: 10 }}>Item flags<textarea className="textarea" value={lines(config.itemFlags)} onChange={(event) => setLines("itemFlags", event.target.value)} placeholder="HIDE_ATTRIBUTES" style={{ minHeight: 72 }} /></label></section>
+    <section className="form-section"><h3>Item data</h3><div className="toolbar-row"><label className="field-label">Damage<input className="text-input" type="number" min="0" value={config.damage ?? ""} onChange={(event) => set({ damage: event.target.value === "" ? undefined : Number(event.target.value) })} /></label><label className="field-label">Model data<input className="text-input" type="number" min="0" value={config.modelData ?? ""} onChange={(event) => set({ modelData: event.target.value === "" ? undefined : Number(event.target.value) })} /></label><label className="field-label">Priority<input className="text-input" type="number" min="0" value={config.priority ?? ""} onChange={(event) => set({ priority: event.target.value === "" ? undefined : Number(event.target.value) })} /></label></div><label className="toggle-field"><input type="checkbox" checked={Boolean(config.update)} onChange={() => set({ update: !config.update })} /><span><strong>Update item</strong></span></label><label className="field-label" style={{ marginTop: 10 }}>Item model<input className="text-input" value={config.itemModel ?? ""} onChange={(event) => set({ itemModel: event.target.value || undefined })} placeholder="namespace:model" /></label></section>
+    <section className="form-section"><h3>Extra click commands</h3><p className="helper">Left click dùng Action mapping. Mỗi dòng dưới đây là một DeluxeMenus command.</p>{([["rightClickCommands", "Right click"], ["shiftLeftClickCommands", "Shift + left click"], ["shiftRightClickCommands", "Shift + right click"], ["middleClickCommands", "Middle click"]] as const).map(([key, label]) => <label className="field-label" key={key}>{label}<textarea className="textarea" value={lines(config[key])} onChange={(event) => setLines(key, event.target.value)} placeholder="[message] Xin chào {player}" style={{ minHeight: 64 }} /></label>)}</section>
+    <section className="form-section"><h3>Requirements (JSON)</h3><p className="helper">Nhập object requirements chuẩn DeluxeMenus. Để trống nếu không dùng.</p>{([["viewRequirement", "View requirement"], ["leftClickRequirement", "Left click requirement"], ["rightClickRequirement", "Right click requirement"], ["shiftLeftClickRequirement", "Shift left requirement"], ["shiftRightClickRequirement", "Shift right requirement"]] as const).map(([key, label]) => <label className="field-label" key={key}>{label}<textarea className="textarea" value={config[key] ? JSON.stringify(config[key], null, 2) : ""} onChange={(event) => setJson(key, event.target.value)} placeholder='{"requirements":{"permission":{"type":"has permission","permission":"server.vip"}}}' style={{ minHeight: 88 }} /></label>)}</section>
+  </>;
+}
+
 type ExportFormat = "json" | "deluxemenus";
 
 function ExportModal({ state, apiStatus, dispatch }: { state: EditorState; apiStatus: "loading" | "saved" | "saving" | "offline" | "conflict"; dispatch: Dispatch<Parameters<typeof reducer>[1]> }) {
@@ -1007,8 +1059,14 @@ function ExportModal({ state, apiStatus, dispatch }: { state: EditorState; apiSt
 
   const [includePrompt, setIncludePrompt] = useState(true);
   const [exportFormat, setExportFormat] = useState<ExportFormat>("json");
-  const [openCommand, setOpenCommand] = useState("");
-  const [registerCommand, setRegisterCommand] = useState(false);
+  const deluxeMenusConfig = state.deluxeMenus;
+  const setDeluxeMenusConfig = (patch: Partial<EditorState["deluxeMenus"]>) => dispatch({ type: "SET_DELUXE_MENUS_MENU", config: { ...deluxeMenusConfig, ...patch } });
+  const [openRequirementDraft, setOpenRequirementDraft] = useState(() => deluxeMenusConfig.openRequirement ? JSON.stringify(deluxeMenusConfig.openRequirement, null, 2) : "");
+  const saveOpenRequirement = (value: string) => {
+    setOpenRequirementDraft(value);
+    try { setDeluxeMenusConfig({ openRequirement: value.trim() ? JSON.parse(value) : undefined }); }
+    catch { dispatch({ type: "TOAST", toast: { message: "Open requirement JSON không hợp lệ", tone: "error" } }); }
+  };
   const [json, setJson] = useState(() => buildExport(state, { includePrompts: true }));
 
   const handleMenuIdChange = (val: string) => {
@@ -1038,17 +1096,18 @@ function ExportModal({ state, apiStatus, dispatch }: { state: EditorState; apiSt
       });
     const input = {
       ...exportData,
+      ...state.deluxeMenus,
       container: state.container,
       items,
     };
     return mapJsonGuiToDeluxeMenus(input, {
       menuId: menuId || undefined,
-      openCommand: openCommand || undefined,
-      registerCommand,
+      openCommand: deluxeMenusConfig.openCommand || undefined,
+      registerCommand: deluxeMenusConfig.registerCommand,
       includePrompts: includePrompt,
       emitEmptyOpenCommand: true,
     });
-  }, [state, includePrompt, openCommand, registerCommand, menuId]);
+  }, [state, includePrompt, menuId]);
 
   useEffect(() => {
     if (exportFormat === "json") {
@@ -1108,16 +1167,20 @@ function ExportModal({ state, apiStatus, dispatch }: { state: EditorState; apiSt
         </div>
         <div className="form-section">
           <label className="field-label">Open command (tùy chọn)</label>
-          <input className="text-input" value={openCommand} onChange={(e) => setOpenCommand(e.target.value)} placeholder="Ví dụ: mainmenu" />
+          <input className="text-input" value={deluxeMenusConfig.openCommand ?? ""} onChange={(e) => setDeluxeMenusConfig({ openCommand: e.target.value || undefined })} placeholder="Ví dụ: mainmenu" />
           <p className="helper" style={{ fontSize: 11 }}>Lệnh để mở menu. Không có dấu /. Để trống nếu không cần.</p>
         </div>
         <div className="form-section">
           <label className="field-label" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <input type="checkbox" checked={registerCommand} onChange={(e) => setRegisterCommand(e.target.checked)} />
+            <input type="checkbox" checked={Boolean(deluxeMenusConfig.registerCommand)} onChange={(e) => setDeluxeMenusConfig({ registerCommand: e.target.checked })} />
             Đăng ký command
           </label>
           <p className="helper" style={{ fontSize: 11 }}>Cần restart server để command registration có hiệu lực.</p>
         </div>
+        <div className="form-section"><label className="field-label">Update interval (ticks)</label><input className="text-input" type="number" min="1" value={deluxeMenusConfig.updateInterval ?? ""} onChange={(e) => setDeluxeMenusConfig({ updateInterval: e.target.value === "" ? undefined : Number(e.target.value) })} placeholder="Ví dụ: 20" /></div>
+        <div className="form-section"><label className="field-label">Open commands</label><textarea className="textarea" value={(deluxeMenusConfig.openCommands ?? []).join("\n")} onChange={(e) => setDeluxeMenusConfig({ openCommands: e.target.value.split("\n").map((line) => line.trim()).filter(Boolean) })} placeholder="[sound] BLOCK_CHEST_OPEN 1 1" style={{ minHeight: 64 }} /></div>
+        <div className="form-section"><label className="field-label">Close commands</label><textarea className="textarea" value={(deluxeMenusConfig.closeCommands ?? []).join("\n")} onChange={(e) => setDeluxeMenusConfig({ closeCommands: e.target.value.split("\n").map((line) => line.trim()).filter(Boolean) })} placeholder="[sound] BLOCK_CHEST_CLOSE 1 1" style={{ minHeight: 64 }} /></div>
+        <div className="form-section"><label className="field-label">Open requirement (JSON)</label><textarea className="textarea" value={openRequirementDraft} onChange={(e) => saveOpenRequirement(e.target.value)} placeholder='{"requirements":{"permission":{"type":"has permission","permission":"server.vip"}}}' style={{ minHeight: 88 }} /></div>
       </div>}
       <div className={`validation-row ${apiStatus === "offline" || apiStatus === "conflict" || state.dirty || apiStatus === "saving" ? "warning" : ""}`}>
         {apiStatus === "offline" || apiStatus === "conflict" || state.dirty || apiStatus === "saving" ? <AlertTriangle size={16} /> : <CheckCircle2 size={16} />}

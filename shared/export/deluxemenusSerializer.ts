@@ -58,6 +58,8 @@ function serializeObject(obj: Record<string, unknown>, indent: number = 0): stri
     "hide_tooltip",
     "enchantment_glint_override",
     "unbreakable",
+    "hide_attributes",
+    "hide_enchantments",
     "view_requirement",
     "left_click_requirement",
     "right_click_requirement",

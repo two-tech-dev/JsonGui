@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CONTAINERS, FALLBACK_ITEMS, buildExport, getFilteredItems, initialState, isValidContainerSlot, reducer, trimForContainer } from "./editor";
+import { CONTAINERS, FALLBACK_ITEMS, buildExport, canonicalExportToProject, getFilteredItems, initialState, isValidContainerSlot, reducer, trimForContainer } from "./editor";
 
 describe("GUI Forge editor domain", () => {
   it("starts with an empty demo-free project and no fake fallback catalog", () => {
@@ -23,10 +23,46 @@ describe("GUI Forge editor domain", () => {
     expect(json.items[0].prompt).toBe("Open quests");
   });
 
+  it("imports canonical JSON export into current project metadata", () => {
+    const catalog = [{ id: "minecraft:allay_spawn_egg", name: "Allay Spawn Egg", material: "ALLAY_SPAWN_EGG", category: "Utility" as const, icon: "allay_spawn_egg", maxStack: 64, description: "" }];
+    const project = canonicalExportToProject({ format: "gui-forge/minecraft-java-gui", formatVersion: 1, catalogVersion: "catalog-v1", container: { id: "single-chest", bukkitType: "CHEST", rows: 3, slots: 27 }, title: "Cac", items: [{ slot: 20, itemId: "minecraft:allay_spawn_egg", material: "ALLAY_SPAWN_EGG", amount: 1, displayName: "Allay Spawn Egg", lore: [], action: { type: "prompt_only" } }] }, { id: "main-menu", revision: 4, description: "Menu chính" }, catalog);
+    expect(project).toMatchObject({ schemaVersion: 1, id: "main-menu", revision: 4, catalogVersion: "catalog-v1", title: "Cac", containerId: "single-chest", itemDefaults: {} });
+    expect(project.placements).toEqual([expect.objectContaining({ slot: 20, prompt: "", includeInExport: true })]);
+  });
+
+  it("rejects invalid canonical export items", () => {
+    const catalog = [{ id: "minecraft:allay_spawn_egg", name: "Allay Spawn Egg", material: "ALLAY_SPAWN_EGG", category: "Utility" as const, icon: "allay_spawn_egg", maxStack: 1, description: "" }];
+    const source = { format: "gui-forge/minecraft-java-gui", formatVersion: 1, catalogVersion: "catalog-v1", container: { id: "single-chest", bukkitType: "CHEST", rows: 3, slots: 27 }, title: "Cac", items: [{ slot: 27, itemId: "minecraft:allay_spawn_egg", material: "ALLAY_SPAWN_EGG", amount: 2, displayName: "Allay Spawn Egg", lore: [], action: { type: "prompt_only" } }] };
+    expect(() => canonicalExportToProject(source, { id: "main-menu", revision: 1, description: "" }, catalog)).toThrow("Slot 1 không hợp lệ");
+  });
+
+  it("rejects canonical material, amount, duplicate slot, and unknown item errors", () => {
+    const catalog = [{ id: "minecraft:allay_spawn_egg", name: "Allay Spawn Egg", material: "ALLAY_SPAWN_EGG", category: "Utility" as const, icon: "allay_spawn_egg", maxStack: 1, description: "" }];
+    const base = { format: "gui-forge/minecraft-java-gui", formatVersion: 1, catalogVersion: "catalog-v1", container: { id: "single-chest", bukkitType: "CHEST", rows: 3, slots: 27 }, title: "Cac" };
+    const item = { slot: 2, itemId: "minecraft:allay_spawn_egg", material: "ALLAY_SPAWN_EGG", amount: 1, displayName: "Allay Spawn Egg", lore: [], action: { type: "prompt_only" } };
+    const convert = (items: unknown[], itemsCatalog = catalog) => canonicalExportToProject({ ...base, items }, { id: "main-menu", revision: 1, description: "" }, itemsCatalog);
+    expect(() => convert([{ ...item, material: "DIAMOND" }])).toThrow("Material");
+    expect(() => convert([{ ...item, amount: 2 }])).toThrow("Số lượng");
+    expect(() => convert([item, item])).toThrow("trùng");
+    expect(() => convert([{ ...item, itemId: "minecraft:missing", material: "MISSING" }], [])).toThrow("không có trong catalog");
+  });
+
+  it("rejects canonical action material outside catalog", () => {
+    const catalog = [{ id: "minecraft:allay_spawn_egg", name: "Allay Spawn Egg", material: "ALLAY_SPAWN_EGG", category: "Utility" as const, icon: "allay_spawn_egg", maxStack: 64, description: "" }];
+    const source = { format: "gui-forge/minecraft-java-gui", formatVersion: 1, catalogVersion: "catalog-v1", container: { id: "single-chest", bukkitType: "CHEST", rows: 3, slots: 27 }, title: "Cac", items: [{ slot: 2, itemId: "minecraft:allay_spawn_egg", material: "ALLAY_SPAWN_EGG", amount: 1, displayName: "Allay Spawn Egg", lore: [], action: { type: "give_item", material: "DIAMOND", amount: 1 } }] };
+    expect(() => canonicalExportToProject(source, { id: "main-menu", revision: 1, description: "" }, catalog)).toThrow("Action material");
+  });
+
   it("filters full catalog by registry ID and favorites/recent tabs", () => {
     const catalog = [{ id: "minecraft:diamond", name: "Diamond", material: "DIAMOND", category: "Misc" as const, icon: "minecraft:diamond", maxStack: 64, description: "" }, { id: "minecraft:bread", name: "Bread", material: "BREAD", category: "Food" as const, icon: "minecraft:bread", maxStack: 64, description: "" }];
     expect(getFilteredItems({ ...initialState, catalog, query: "minecraft:diamond" }).map((item) => item.id)).toEqual(["minecraft:diamond"]);
     expect(getFilteredItems({ ...initialState, catalog, libraryTab: "Favorites", favorites: ["minecraft:bread"] }).map((item) => item.id)).toEqual(["minecraft:bread"]);
+  });
+
+  it("keeps external canonical imports dirty", () => {
+    const project = { schemaVersion: 1 as const, id: "main-menu", revision: 1, catalogVersion: "catalog-v1", title: "Cac", description: "", containerId: "single-chest", itemDefaults: {}, placements: [], updatedAt: "2026-01-01T00:00:00.000Z" };
+    expect(reducer(initialState, { type: "HYDRATE", project, catalog: [], dirty: true }).dirty).toBe(true);
+    expect(reducer(initialState, { type: "HYDRATE", project, catalog: [] }).dirty).toBe(false);
   });
 
   it("keeps drawer drafts local until saving placement details", () => {

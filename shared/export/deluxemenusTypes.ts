@@ -25,6 +25,9 @@ export interface DeluxeMenusItem {
   material: string;
   amount?: number;
   damage?: number;
+  model_data?: number;
+  model_data_component?: Record<string, unknown>;
+  item_model?: string;
   slot?: number;
   slots?: number[];
   priority?: number;
@@ -107,8 +110,36 @@ export interface JsonGuiPlacedItem {
   action: JsonGuiAction;
   developerNotes?: string;
   includeInExport?: boolean;
+  damage?: number;
+  modelData?: number;
+  modelDataComponent?: Record<string, unknown>;
+  itemModel?: string;
   priority?: number;
+  update?: boolean;
+  slots?: number[];
+  enchantments?: string[];
+  itemFlags?: string[];
+  hideTooltip?: boolean;
+  enchantmentGlintOverride?: boolean;
+  unbreakable?: boolean;
+  hideAttributes?: boolean;
+  hideEnchantments?: boolean;
+  rightClickCommands?: string[];
+  shiftLeftClickCommands?: string[];
+  shiftRightClickCommands?: string[];
+  middleClickCommands?: string[];
   viewRequirement?: Record<string, unknown>;
+  leftClickRequirement?: Record<string, unknown>;
+  rightClickRequirement?: Record<string, unknown>;
+  shiftLeftClickRequirement?: Record<string, unknown>;
+  shiftRightClickRequirement?: Record<string, unknown>;
+}
+
+export interface JsonGuiMenuConfig {
+  updateInterval?: number;
+  openCommands?: string[];
+  closeCommands?: string[];
+  openRequirement?: Record<string, unknown>;
 }
 
 export interface JsonGuiContainer {
@@ -121,7 +152,7 @@ export interface JsonGuiContainer {
   compatibility: "Direct" | "Special" | "Unavailable";
 }
 
-export interface JsonGuiExport {
+export interface JsonGuiExport extends JsonGuiMenuConfig {
   format: string;
   formatVersion: number;
   catalogVersion: string;

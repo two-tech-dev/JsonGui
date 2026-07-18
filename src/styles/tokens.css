@@ -12,6 +12,8 @@
   --surface-1: #111113;
   --surface-2: #151517;
   --surface-3: #1a1a1d;
+  --surface-elevated: var(--surface-3);
+  --surface-panel: var(--bg-sidebar);
   --surface-hover: #1e1e22;
   --surface-active: #242429;
 
@@ -23,6 +25,7 @@
   /* Text Colors */
   --text-primary: #f5f5f5;
   --text-secondary: #a3a3a3;
+  --text-tertiary: #85858b;
   --text-muted: #707070;
   --text-disabled: #4b4b4b;
 
@@ -35,6 +38,8 @@
   /* Status Colors */
   --danger: #f06a78;
   --warning: #e6b95c;
+  --status-warning: var(--warning);
+  --status-error: var(--danger);
   --info: #6ba4e8;
 
   /* Spacing */
@@ -48,6 +53,7 @@
 
   /* Border Radius */
   --radius-sm: 6px;
+  --radius-input: var(--radius-sm);
   --radius-md: 8px;
   --radius-lg: 12px;
 

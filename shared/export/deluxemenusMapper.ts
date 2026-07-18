@@ -56,7 +56,8 @@ function mapJsonGuiActionToDeluxeMenus(action: JsonGuiAction, issues: ExportVali
     case "give_item":
       return [`[give] ${action.material || ""} ${action.amount || 1}`];
     case "teleport":
-      return [`[connect] ${action.world || ""} ${action.x || 0} ${action.y || 0} ${action.z || 0}`];
+      issues.push({ path, message: "Teleport action cannot be represented by DeluxeMenus without a player command; export skipped.", severity: "warning" });
+      return [];
     case "refresh":
       return ["[refresh]"];
     case "connect":
@@ -183,6 +184,7 @@ export function mapJsonGuiToDeluxeMenus(
       dmItem.shift_right_click_requirement = itemRecord["shiftRightClickRequirement"] as Record<string, unknown>;
     }
 
+    if (itemRecord["leftClickCommands"] !== undefined) dmItem.left_click_commands = itemRecord["leftClickCommands"] as string[];
     if (itemRecord["rightClickCommands"] !== undefined) {
       dmItem.right_click_commands = itemRecord["rightClickCommands"] as string[];
     }
@@ -204,9 +206,12 @@ export function mapJsonGuiToDeluxeMenus(
       delete dmItem.slot;
     }
 
-    if (itemRecord["enchantments"] !== undefined) {
-      dmItem.enchantments = itemRecord["enchantments"] as string[];
-    }
+    if (itemRecord["modelData"] !== undefined) dmItem.model_data = itemRecord["modelData"] as number;
+    if (itemRecord["modelDataComponent"] !== undefined) dmItem.model_data_component = itemRecord["modelDataComponent"] as Record<string, unknown>;
+    if (itemRecord["itemModel"] !== undefined) dmItem.item_model = itemRecord["itemModel"] as string;
+    if (itemRecord["hideAttributes"] !== undefined) dmItem.hide_attributes = itemRecord["hideAttributes"] as boolean;
+    if (itemRecord["hideEnchantments"] !== undefined) dmItem.hide_enchantments = itemRecord["hideEnchantments"] as boolean;
+    if (itemRecord["enchantments"] !== undefined) dmItem.enchantments = itemRecord["enchantments"] as string[];
 
     if (itemRecord["bannerMeta"] !== undefined) {
       (dmItem as unknown as Record<string, unknown>)["banner_meta"] = itemRecord["bannerMeta"];
@@ -229,8 +234,8 @@ export function mapJsonGuiToDeluxeMenus(
     const actionPath = `items[${itemId}].action`;
     const actions = mapJsonGuiActionToDeluxeMenus(item.action, issues, actionPath);
     if (actions.length > 0) {
-      dmItem.left_click_commands = actions;
-    } else if (item.action.type === "prompt_only") {
+      dmItem.left_click_commands = [...(dmItem.left_click_commands ?? []), ...actions];
+    } else if (item.action.type === "prompt_only" && !dmItem.left_click_commands?.length) {
       issues.push({ path: `items[${itemId}]`, message: `Item at slot ${item.slot} has no runtime action (prompt only)`, severity: "warning" });
     }
 
@@ -281,14 +286,10 @@ export function mapJsonGuiToDeluxeMenus(
     document.size = size;
   }
 
-  const inputRecord = input as unknown as Record<string, unknown>;
-  if (inputRecord["openCommands"]) {
-    document.open_commands = inputRecord["openCommands"] as string[];
-  }
-
-  if (inputRecord["closeCommands"]) {
-    document.close_commands = inputRecord["closeCommands"] as string[];
-  }
+  if (input.updateInterval !== undefined) document.update_interval = input.updateInterval;
+  if (input.openRequirement !== undefined) document.open_requirement = input.openRequirement;
+  if (input.openCommands !== undefined) document.open_commands = input.openCommands;
+  if (input.closeCommands !== undefined) document.close_commands = input.closeCommands;
 
   return {
     document,
