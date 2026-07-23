@@ -1,0 +1,39 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "JsonGui",
+  "version": "0.1.0",
+  "identifier": "com.twotech.jsongui",
+  "build": {
+    "beforeDevCommand": "npm run dev:web",
+    "beforeBuildCommand": "npm run build",
+    "devUrl": "http://127.0.0.1:5173",
+    "frontendDist": "../dist"
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis", "msi"],
+    "externalBin": ["binaries/node"],
+    "resources": ["../server", "../shared", "../item", "../models"],
+    "icon": ["icons/icon.ico", "icons/icon.icns", "icons/128x128.png"]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDk5NjgwMkY2RTEwQTVBNDYKUldSR1dncmg5Z0pvbWVyM1F4T3hYYWFyTnA3YWo2bEFsTmYwVnBoSTUvVXlyRDFUVExtTDVEOHQK",
+      "endpoints": ["https://github.com/two-tech-dev/JsonGui/releases/latest/download/latest.json"]
+    }
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "JsonGui",
+        "width": 1440,
+        "height": 940,
+        "minWidth": 980,
+        "minHeight": 680
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: http://127.0.0.1:*; connect-src 'self' http://127.0.0.1:*; base-uri 'none'; frame-ancestors 'none'"
+    }
+  }
+}

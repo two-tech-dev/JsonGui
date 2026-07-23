@@ -1,0 +1,12 @@
+C:\ok\JsonGui\src-tauri\target\debug\deps\bitflags-9ab75905a78cd406.d: C:\Users\HuyBao\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\bitflags-2.13.1\src\lib.rs C:\Users\HuyBao\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\bitflags-2.13.1\src\iter.rs C:\Users\HuyBao\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\bitflags-2.13.1\src\parser.rs C:\Users\HuyBao\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\bitflags-2.13.1\src\traits.rs C:\Users\HuyBao\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\bitflags-2.13.1\src\public.rs C:\Users\HuyBao\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\bitflags-2.13.1\src\internal.rs C:\Users\HuyBao\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\bitflags-2.13.1\src\external.rs C:\Users\HuyBao\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\bitflags-2.13.1\src\external\serde.rs
+
+C:\ok\JsonGui\src-tauri\target\debug\deps\libbitflags-9ab75905a78cd406.rmeta: C:\Users\HuyBao\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\bitflags-2.13.1\src\lib.rs C:\Users\HuyBao\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\bitflags-2.13.1\src\iter.rs C:\Users\HuyBao\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\bitflags-2.13.1\src\parser.rs C:\Users\HuyBao\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\bitflags-2.13.1\src\traits.rs C:\Users\HuyBao\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\bitflags-2.13.1\src\public.rs C:\Users\HuyBao\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\bitflags-2.13.1\src\internal.rs C:\Users\HuyBao\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\bitflags-2.13.1\src\external.rs C:\Users\HuyBao\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\bitflags-2.13.1\src\external\serde.rs
+
+C:\Users\HuyBao\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\bitflags-2.13.1\src\lib.rs:
+C:\Users\HuyBao\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\bitflags-2.13.1\src\iter.rs:
+C:\Users\HuyBao\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\bitflags-2.13.1\src\parser.rs:
+C:\Users\HuyBao\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\bitflags-2.13.1\src\traits.rs:
+C:\Users\HuyBao\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\bitflags-2.13.1\src\public.rs:
+C:\Users\HuyBao\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\bitflags-2.13.1\src\internal.rs:
+C:\Users\HuyBao\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\bitflags-2.13.1\src\external.rs:
+C:\Users\HuyBao\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\bitflags-2.13.1\src\external\serde.rs:

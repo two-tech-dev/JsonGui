@@ -144,3 +144,22 @@
   .preview-card { padding: 12px; }
   .stat-row { padding-block: 6px; }
 }
+
+.plugin-workspace-shell { min-height: 100vh; display: flex; flex-direction: column; }
+.plugin-workspace-nav { padding: 12px 20px; border-bottom: 1px solid var(--border-subtle); }
+.plugin-workspace { width: min(1200px, calc(100% - 32px)); margin: 28px auto; }
+.plugin-workspace-header { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 18px; }
+.plugin-workspace-header h1 { margin: 3px 0 0; font-size: 24px; }
+.plugin-connect-card { max-width: 600px; margin: 72px auto; padding: 28px; display: grid; gap: 16px; }
+.plugin-workspace-layout { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: 16px; }
+.plugin-explorer, .plugin-details { min-height: 460px; }
+.plugin-gui-row { display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--border-subtle); padding: 8px; }
+.plugin-gui-row > button:first-child { flex: 1; background: transparent; border: 0; color: var(--text-primary); text-align: left; padding: 7px; cursor: pointer; }
+.plugin-gui-row small { display: block; color: var(--text-secondary); margin-top: 3px; }
+.plugin-gui-row.error { border-left: 3px solid var(--status-error); }
+.plugin-gui-row.warning { border-left: 3px solid var(--status-warning); }
+.plugin-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 18px 0; }
+.plugin-facts div { background: var(--surface-elevated); padding: 12px; border-radius: 6px; }
+.plugin-facts small { color: var(--text-secondary); display: block; margin-bottom: 4px; }
+.plugin-facts strong { overflow-wrap: anywhere; }
+@media (max-width: 760px) { .plugin-workspace { width: min(100% - 20px, 1200px); margin: 16px auto; } .plugin-workspace-header, .plugin-workspace-layout { display: block; } .plugin-workspace-header .toolbar-row { margin-top: 12px; } .plugin-explorer { min-height: 280px; margin-bottom: 16px; } .plugin-facts { grid-template-columns: 1fr; } }

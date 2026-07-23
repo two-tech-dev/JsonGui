@@ -1,0 +1,5 @@
+*
+!.gitignore
+
+# Staged Node sidecar binaries stay local and are supplied by release CI.
+# Tauri expects target-specific names such as node-x86_64-pc-windows-msvc.exe.

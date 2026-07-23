@@ -1,0 +1,57 @@
+name: Release JsonGui Desktop
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable-x86_64-pc-windows-msvc
+      - name: Validate release version
+        shell: pwsh
+        run: |
+          $version = node -p "require('./package.json').version"
+          if ($env:GITHUB_REF_NAME -ne "v$version") { throw "Tag $env:GITHUB_REF_NAME must match package.json v$version" }
+          if ((Select-String -Path src-tauri/Cargo.toml -Pattern '^version = "' | Select-Object -First 1).Line -ne "version = `"$version`"") { throw "Cargo version must match package.json" }
+          if (-not (Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).plugins.updater.pubkey) { throw "Set TAURI updater public key before release" }
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run test:server
+      - run: npm run desktop:stage-node
+      - name: Build signed NSIS updater bundle
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: npx tauri build --bundles nsis
+      - name: Publish signed GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          $version = node -p "require('./package.json').version"
+          $tag = "v$version"
+          $zip = Get-ChildItem src-tauri/target/release/bundle/nsis/*.nsis.zip | Select-Object -First 1
+          $sig = Get-ChildItem src-tauri/target/release/bundle/nsis/*.nsis.zip.sig | Select-Object -First 1
+          $installer = Get-ChildItem src-tauri/target/release/bundle/nsis/*-setup.exe | Select-Object -First 1
+          if (-not $zip -or -not $sig -or -not $installer) { throw "Missing signed NSIS updater artifacts" }
+          $signature = (Get-Content $sig.FullName -Raw).Trim()
+          if (-not $signature) { throw "Updater signature is empty" }
+          $notes = "JsonGui $version"
+          $manifest = @{ version = $version; notes = $notes; pub_date = (Get-Date).ToUniversalTime().ToString('o'); platforms = @{ 'windows-x86_64' = @{ signature = $signature; url = "https://github.com/${{ github.repository }}/releases/download/$tag/$($zip.Name)" } } } | ConvertTo-Json -Depth 5
+          Set-Content -Path latest.json -Value $manifest -NoNewline
+          gh release create $tag --title "JsonGui $version" --notes $notes $installer.FullName $zip.FullName $sig.FullName latest.json

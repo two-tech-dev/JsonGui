@@ -1,4 +1,5 @@
-import { memo, type CSSProperties } from "react";
+import { memo, type CSSProperties, useEffect, useState } from "react";
+import { apiUrl } from "../api/client";
 
 interface PixelItemIconProps { kind: string; size?: number; label?: string; material?: string; }
 
@@ -6,7 +7,12 @@ function hash(text: string) { return [...text].reduce((value, char) => (value * 
 
 export const PixelItemIcon = memo(function PixelItemIcon({ kind, size = 32, label, material }: PixelItemIconProps) {
   const assetName = `${kind.replace(/[./-]/g, "_")}.png`;
-  const iconUrl = `/api/v1/assets/${encodeURIComponent(assetName)}`;
+  const [iconUrl, setIconUrl] = useState("");
+  useEffect(() => {
+    let active = true;
+    void apiUrl(`/api/v1/assets/${encodeURIComponent(assetName)}`).then((url) => { if (active) setIconUrl(url); });
+    return () => { active = false; };
+  }, [assetName]);
 
   const seed = hash(kind);
   const base = `hsl(${seed % 360} 46% 58%)`;
@@ -19,7 +25,7 @@ export const PixelItemIcon = memo(function PixelItemIcon({ kind, size = 32, labe
     <div style={{ display: "inline-block", verticalAlign: "middle" }}>
       <img
         className="pixel-icon-img"
-        src={iconUrl}
+        src={iconUrl || undefined}
         alt={`${label ?? kind}${material ? `, ${material}` : ""} icon`}
         width={size}
         height={size}

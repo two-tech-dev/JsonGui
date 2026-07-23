@@ -1,0 +1,22 @@
+[package]
+name = "jsongui"
+version = "0.1.0"
+description = "JsonGui local desktop shell"
+authors = ["two-tech-dev"]
+edition = "2021"
+
+[lib]
+name = "jsongui_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+serde_json = "1"
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+tauri-plugin-shell = "2"
+tauri-plugin-process = "2"
+tauri-plugin-updater = "2"
+# Keep updater signing public key in tauri.conf.json; private key belongs in CI secrets.

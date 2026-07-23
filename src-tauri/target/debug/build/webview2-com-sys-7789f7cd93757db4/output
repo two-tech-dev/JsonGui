@@ -1,0 +1,2 @@
+cargo:rustc-link-search=native=C:\ok\JsonGui\src-tauri\target\debug\build\webview2-com-sys-7789f7cd93757db4\out\x64
+cargo:rustc-link-lib=advapi32

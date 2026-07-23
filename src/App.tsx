@@ -13,6 +13,7 @@ import {
   Download,
   Eye,
   FileDown,
+  FolderOpen,
   GripVertical,
   HelpCircle,
   LayoutGrid,
@@ -36,7 +37,9 @@ import {
 } from "lucide-react";
 import { PixelItemIcon } from "./components/PixelItemIcon";
 import { LibraryVirtualGrid } from "./components/LibraryVirtualGrid";
-import { ApiError, getCanonicalExport, getCatalog, getProject, putProject } from "./api/client";
+import { PluginWorkspace } from "./components/PluginWorkspace";
+import { ApiError, bootstrapSessionToken, getCanonicalExport, getCatalog, getProject, putProject, putWorkspaceGui } from "./api/client";
+import { canCheckForUpdates, checkForUpdate, downloadInstallAndRelaunch, type UpdateInfo, type UpdateProgress } from "./platform/updater";
 import {
   CONTAINERS,
   editorStateToProject,
@@ -142,6 +145,7 @@ function importDeluxeMenusYaml(yamlStr: string, catalog: ItemDefinition[]): Part
 
 function App() {
   const [state, dispatch] = useReducer(reducer, initialState);
+  const [appMode, setAppMode] = useState<"editor" | "workspace">("editor");
   const [dragSlot, setDragSlot] = useState<number | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const dragSourceRef = useRef<number | null>(null);
@@ -170,7 +174,10 @@ function App() {
   }, []);
   const [apiStatus, setApiStatus] = useState<"loading" | "saved" | "saving" | "offline" | "conflict">("loading");
   const [etag, setEtag] = useState<string | null>(null);
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null);
   const [saveTick, setSaveTick] = useState(0);
+  const [update, setUpdate] = useState<{ info: UpdateInfo; phase: "available" | "downloading" | "installing" | "error"; percent?: number; message?: string } | null>(null);
+  const updateCheckStarted = useRef(false);
 
   // Keyboard navigation & zoom state history
   const [undoStack, setUndoStack] = useState<Omit<EditorState, "toast" | "dirty" | "overlay">[]>([]);
@@ -241,6 +248,7 @@ function App() {
     let cancelled = false;
     (async () => {
       try {
+        await bootstrapSessionToken();
         const projectResponse = await getProject("main-menu");
         const project = projectResponse.data as ProjectDocument;
         const catalogResponse = await getCatalog(project.catalogVersion);
@@ -270,6 +278,28 @@ function App() {
     return () => { cancelled = true; };
   }, []);
 
+  useEffect(() => {
+    if (!canCheckForUpdates() || updateCheckStarted.current) return;
+    updateCheckStarted.current = true;
+    let cancelled = false;
+    void checkForUpdate().then((available) => {
+      if (!cancelled && available) setUpdate({ info: available, phase: "available" });
+    }).catch(() => undefined);
+    return () => { cancelled = true; };
+  }, []);
+
+  const installUpdate = async () => {
+    if (!update || update.phase === "downloading" || update.phase === "installing") return;
+    const info = update.info;
+    try {
+      await downloadInstallAndRelaunch((progress: UpdateProgress) => {
+        setUpdate({ info, phase: progress.phase, percent: progress.phase === "downloading" ? progress.percent : undefined });
+      });
+    } catch {
+      setUpdate({ info, phase: "error", message: "Không thể tải hoặc xác minh bản cập nhật. Ứng dụng chưa thay đổi." });
+    }
+  };
+
   const saveGeneration = useRef(0);
   const inFlight = useRef(false);
   useEffect(() => {
@@ -281,7 +311,9 @@ function App() {
       setApiStatus("saving");
       const snapshot = editorStateToProject(state);
       try {
-        const response = await putProject(state.projectId, snapshot, etag);
+        const response = activeWorkspaceId
+          ? await putWorkspaceGui(activeWorkspaceId, state.projectId, snapshot, etag)
+          : await putProject(state.projectId, snapshot, etag);
         setEtag(response.etag);
         if (generation === saveGeneration.current) dispatch({ type: "MARK_SAVED", revision: (response.data as ProjectDocument).revision });
         setApiStatus(generation === saveGeneration.current ? "saved" : "saving");
@@ -297,9 +329,9 @@ function App() {
   }, [apiStatus]);
 
   useEffect(() => {
-    document.body.style.overflow = state.overlay ? "hidden" : "";
+    document.body.style.overflow = state.overlay || update ? "hidden" : "";
     return () => { document.body.style.overflow = ""; };
-  }, [state.overlay]);
+  }, [state.overlay, update]);
 
   useEffect(() => {
     if (apiStatus !== "offline" || !state.dirty) return;
@@ -440,10 +472,25 @@ function App() {
   const undoToast = () => {
     handleUndo();
   };
+  const openWorkspaceGui = async (project: ProjectDocument, nextEtag: string, workspaceId: string) => {
+    try {
+      const catalogResponse = await getCatalog(project.catalogVersion);
+      dispatch({ type: "HYDRATE", project, catalog: catalogResponse.data.items });
+      setEtag(nextEtag);
+      setActiveWorkspaceId(workspaceId);
+      try { localStorage.setItem("jsongui:workspace:active", workspaceId); } catch { /* storage optional */ }
+      setAppMode("editor");
+      setApiStatus("saved");
+    } catch (error) {
+      dispatch({ type: "TOAST", toast: { message: error instanceof Error ? error.message : "Không thể tải catalog cho GUI.", tone: "error" } });
+    }
+  };
+
+  if (appMode === "workspace") return <div className="app-shell plugin-workspace-shell"><div className="plugin-workspace-nav"><button className="secondary-button" onClick={() => setAppMode("editor")}>Back to editor</button></div><PluginWorkspace onOpenGui={(project, nextEtag, workspaceId) => void openWorkspaceGui(project, nextEtag, workspaceId)} /></div>;
 
   return <div className={`app-shell ${isDragging ? "dragging" : ""}`}>
     <a className="skip-link" href="#workspace">Bỏ qua thanh công cụ</a>
-    <AppHeader state={state} apiStatus={apiStatus} dispatch={dispatch} handleUndo={handleUndo} handleRedo={handleRedo} undoStack={undoStack} redoStack={redoStack} activityLog={activityLog} />
+    <AppHeader state={state} apiStatus={apiStatus} dispatch={dispatch} handleUndo={handleUndo} handleRedo={handleRedo} undoStack={undoStack} redoStack={redoStack} activityLog={activityLog} onOpenWorkspace={() => setAppMode("workspace")} />
     <div className="editor-layout">
       <PlacedItemsPanel state={state} placedItems={placedItems} promptCount={promptCount} dispatch={dispatch} placedSearch={placedSearch} setPlacedSearch={setPlacedSearch} placedFilter={placedFilter} setPlacedFilter={setPlacedFilter} placedSort={placedSort} setPlacedSort={setPlacedSort} placedDensity={placedDensity} setPlacedDensity={setPlacedDensity} />
       <main className="workspace" id="workspace">
@@ -474,11 +521,23 @@ function App() {
     {state.overlay === "export" && <ExportModal state={state} apiStatus={apiStatus} dispatch={dispatch} />}
     {state.overlay === "placed" && <MobilePanel title="Item đã đặt" onClose={() => dispatch({ type: "CLOSE_OVERLAY" })}><PlacedItemsPanel state={state} placedItems={placedItems} promptCount={promptCount} dispatch={dispatch} placedSearch={placedSearch} setPlacedSearch={setPlacedSearch} placedFilter={placedFilter} setPlacedFilter={setPlacedFilter} placedSort={placedSort} setPlacedSort={setPlacedSort} placedDensity={placedDensity} setPlacedDensity={setPlacedDensity} embedded /></MobilePanel>}
     {state.overlay === "library" && <MobilePanel title="Minecraft items" onClose={() => dispatch({ type: "CLOSE_OVERLAY" })}><ItemLibraryPanel state={state} filteredItems={sortedLibraryItems} dispatch={dispatch} librarySort={librarySort} setLibrarySort={setLibrarySort} libraryDensity={libraryDensity} setLibraryDensity={setLibraryDensity} onQuickAdd={quickAdd} embedded /></MobilePanel>}
+    {update && <UpdateModal update={update} onInstall={() => void installUpdate()} onClose={() => setUpdate(null)} onRetry={() => { setUpdate(null); void checkForUpdate().then((info) => { if (info) setUpdate({ info, phase: "available" }); }).catch(() => undefined); }} />}
     <ToastRegion state={state} dispatch={dispatch} handleUndo={undoToast} />
   </div>;
 }
 
-function AppHeader({ state, apiStatus, dispatch, handleUndo, handleRedo, undoStack, redoStack, activityLog }: { state: EditorState; apiStatus: "loading" | "saved" | "saving" | "offline" | "conflict"; dispatch: Dispatch<Parameters<typeof reducer>[1]>; handleUndo: () => void; handleRedo: () => void; undoStack: unknown[]; redoStack: unknown[]; activityLog: Array<{ id: string; time: string; action: string }> }) {
+function UpdateModal({ update, onInstall, onClose, onRetry }: { update: { info: UpdateInfo; phase: "available" | "downloading" | "installing" | "error"; percent?: number; message?: string }; onInstall: () => void; onClose: () => void; onRetry: () => void }) {
+  const busy = update.phase === "downloading" || update.phase === "installing";
+  const close = busy ? undefined : onClose;
+  const status = update.phase === "downloading" ? `Đang tải${update.percent === undefined ? "…" : ` ${update.percent}%`}` : update.phase === "installing" ? "Đang xác minh và cài đặt…" : update.phase === "error" ? update.message : "Bản mới đã sẵn sàng để tải và cài đặt.";
+  return <div className="overlay-scrim modal-wrap" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) close?.(); }}><section className="modal small" role="dialog" aria-modal="true" aria-labelledby="update-title" aria-live="polite">
+    <header className="modal-header"><div><h2 id="update-title">Có bản cập nhật mới</h2><p>JsonGui {update.info.currentVersion} → {update.info.version}</p></div>{close && <button className="icon-button" aria-label="Đóng cập nhật" onClick={close}><X size={18} /></button>}</header>
+    <div className="modal-body"><p>{status}</p>{update.info.notes && <section className="form-section"><h3>Có gì mới</h3><pre className="update-notes">{update.info.notes}</pre></section>}</div>
+    <footer className="modal-footer">{update.phase === "error" ? <><button className="ghost-button" onClick={onClose}>Để sau</button><button className="primary-button" onClick={onRetry}>Thử lại</button></> : busy ? <button className="primary-button" disabled>{status}</button> : <><button className="ghost-button" onClick={onClose}>Để sau</button><button className="primary-button" onClick={onInstall}>Tải và cài đặt</button></>}</footer>
+  </section></div>;
+}
+
+function AppHeader({ state, apiStatus, dispatch, handleUndo, handleRedo, undoStack, redoStack, activityLog, onOpenWorkspace }: { state: EditorState; apiStatus: "loading" | "saved" | "saving" | "offline" | "conflict"; dispatch: Dispatch<Parameters<typeof reducer>[1]>; handleUndo: () => void; handleRedo: () => void; undoStack: unknown[]; redoStack: unknown[]; activityLog: Array<{ id: string; time: string; action: string }>; onOpenWorkspace: () => void }) {
   const [showActivity, setShowActivity] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
@@ -616,6 +675,7 @@ function AppHeader({ state, apiStatus, dispatch, handleUndo, handleRedo, undoSta
           </div>
         </div>}
       </div>
+      <button className="secondary-button" onClick={onOpenWorkspace}><FolderOpen size={15} />Workspace</button>
       <button className="icon-button" aria-label="Cài đặt dự án" title="Cài đặt dự án" onClick={() => setShowSettings(true)}><Settings size={16} /></button>
       <button className="icon-button" aria-label="Trợ giúp" title="Trợ giúp · Ctrl + K" onClick={() => setShowHelp(true)}><CircleHelp size={16} /></button>
       <button className="primary-button" onClick={() => dispatch({ type: "OPEN_OVERLAY", overlay: "export" })}><Download size={16} />Export</button>

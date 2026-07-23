@@ -4,3 +4,7 @@ data/
 *.tmp
 *.log
 .vite/
+src-tauri/target/
+
+# Tauri release input. Generated locally or by CI, never committed.
+src-tauri/binaries/node-*.exe

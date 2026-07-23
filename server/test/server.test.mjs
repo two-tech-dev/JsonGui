@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, mkdir, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -8,24 +8,37 @@ import { fileURLToPath } from "node:url";
 import { createApp } from "../index.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-let dataRoot; let server; let base;
+let dataRoot; let server; let base; let app; let sessionToken;
 
 beforeEach(async () => {
   dataRoot = await mkdtemp(path.join(tmpdir(), "gui-forge-"));
-  const app = await createApp({ dataRoot, distRoot: null, seedFile: path.join(root, "shared", "seed-v1.json") });
+  app = await createApp({ dataRoot, distRoot: null, seedFile: path.join(root, "shared", "seed-v1.json") });
   server = createServer(app.handler);
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   base = `http://127.0.0.1:${server.address().port}`;
+  const session = await fetch(`${base}/api/v1/session`);
+  sessionToken = (await session.json()).sessionToken;
 });
-afterEach(async () => { await new Promise((resolve) => server.close(resolve)); await rm(dataRoot, { recursive: true, force: true }); });
+afterEach(async () => { await app?.close(); await new Promise((resolve) => server.close(resolve)); await rm(dataRoot, { recursive: true, force: true }); });
 
-async function api(pathname, init) { return fetch(`${base}${pathname}`, init); }
+async function api(pathname, init = {}) { return fetch(`${base}${pathname}`, { ...init, headers: { "X-JsonGui-Token": sessionToken, ...init.headers } }); }
 
 test("loads seed project and returns catalog ETag", async () => {
   const catalog = await api("/api/v1/catalog/current");
   assert.equal(catalog.status, 200); assert.ok(catalog.headers.get("etag"));
   const project = await api("/api/v1/projects/main-menu"); const body = await project.json();
   assert.equal(project.status, 200); assert.deepEqual(body.placements, []); assert.match(body.catalogVersion, /^minecraft-java-1\.21\.8/);
+});
+
+test("allows Tauri origin and rejects untrusted browser origins", async () => {
+  const tauri = await fetch(`${base}/api/v1/health`, { headers: { Origin: "https://tauri.localhost" } });
+  assert.equal(tauri.status, 200);
+  assert.equal(tauri.headers.get("access-control-allow-origin"), "https://tauri.localhost");
+  const preflight = await fetch(`${base}/api/v1/projects/main-menu`, { method: "OPTIONS", headers: { Origin: "https://tauri.localhost", "Access-Control-Request-Method": "PUT" } });
+  assert.equal(preflight.status, 204);
+  assert.match(preflight.headers.get("access-control-allow-methods") ?? "", /PUT/);
+  const blocked = await fetch(`${base}/api/v1/health`, { headers: { Origin: "https://evil.example" } });
+  assert.equal(blocked.status, 403);
 });
 
 test("requires ETag, rejects stale writes, and returns canonical export", async () => {
@@ -49,6 +62,27 @@ test("rejects duplicate slots and leaves saved project untouched", async () => {
   assert.equal(invalid.status, 422);
   const disk = JSON.parse(await readFile(path.join(dataRoot, "projects", "main-menu.json"), "utf8"));
   assert.equal(disk.placements.length, 0);
+});
+
+test("protects workspace routes with token and connects plugin project", async () => {
+  const plugin = await mkdtemp(path.join(tmpdir(), "gui-forge-plugin-"));
+  await mkdir(path.join(plugin, "src/main/java/dev/example"), { recursive: true });
+  await mkdir(path.join(plugin, "src/main/resources"), { recursive: true });
+  await writeFile(path.join(plugin, "build.gradle"), "plugins { id 'java' }");
+  await writeFile(path.join(plugin, "src/main/resources/plugin.yml"), "name: Fixture\\nmain: dev.example.Main\\n");
+  await writeFile(path.join(plugin, "src/main/java/dev/example/Main.java"), "package dev.example; class Main extends JavaPlugin {}");
+  const denied = await fetch(`${base}/api/v1/workspaces/current`);
+  assert.equal(denied.status, 401);
+  const connected = await api("/api/v1/workspaces/connect", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ rootPath: plugin }) });
+  assert.equal(connected.status, 201);
+  const body = await connected.json();
+  assert.equal(body.manifest.mainClass, "dev.example.Main");
+  assert.equal(typeof body.sessionToken, "string");
+  const token = body.sessionToken;
+  const current = await api("/api/v1/workspaces/current", { headers: { "X-JsonGui-Token": token } });
+  assert.equal(current.status, 200);
+  assert.equal(JSON.stringify(await current.json()).includes(plugin), false);
+  await rm(plugin, { recursive: true, force: true });
 });
 
 test("supports projects list, creation, updates, and deletion", async () => {

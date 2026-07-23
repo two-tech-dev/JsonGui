@@ -67,6 +67,7 @@ The goal is not to claim that JSON is universally better than YAML. YAML remains
 - Undo and redo history.
 - Local backup behavior when the API is unavailable.
 - Server-backed project saving with conflict awareness.
+- Connect Plugin Project: local Paper/Spigot/Bukkit project scan, `.jsongui` workspace, multi-GUI explorer, and file-change notices.
 - JSON preview, validation status, clipboard copy, and file download.
 - Optional inclusion of per-item prompts for AI-assisted plugin implementation.
 
@@ -124,21 +125,38 @@ npm install
 
 ### Run in development
 
-Open two terminals from the project directory.
-
-**Terminal 1 — local API**
+Run web editor and API in separate terminals:
 
 ```bash
 npm run dev:api
-```
-
-**Terminal 2 — web editor**
-
-```bash
 npm run dev
 ```
 
-Vite will print the local editor address in the terminal.
+Vite will print the local editor address in the terminal. Desktop mode starts and stops API automatically:
+
+```bash
+npm run desktop:dev
+```
+
+Desktop build needs Windows Node sidecar staged first:
+
+```bash
+npm run desktop:build
+```
+
+Sidecar binary stays ignored. Release CI must stage it before packaging. Signed desktop release setup: [`docs/releasing.md`](docs/releasing.md).
+
+### Plugin Workspace
+
+Open **Workspace** in header, then use **Connect Plugin Project**. JsonGui scans `build.gradle`, `build.gradle.kts`, `pom.xml`, plugin metadata, and `src/main/{java,kotlin,resources}` without running Gradle or Maven. It creates `.jsongui/` inside selected plugin root.
+
+Browser mode accepts a manually entered absolute path. Desktop mode has a native folder picker:
+
+```bash
+npm run desktop:dev
+```
+
+The current scanner selects root module only. Build execution, Behavior IR, AI, MCP, source generation, patches, and rollback are later phases.
 
 ### Production build
 
@@ -177,7 +195,7 @@ JsonGui/
 └─ item/      Item-related resources
 ```
 
-The editor communicates with the local API to retrieve catalog data, save the active project, detect conflicting updates, and request a canonical export. When the API is unavailable, the editor can continue using local backup data, although the resulting local JSON has not been server-validated.
+The editor communicates with the local API to retrieve catalog data, save the active project, detect conflicting updates, and request a canonical export. Plugin Workspace adds a token-protected localhost API that scans a connected project and writes only inside `<plugin-root>/.jsongui/`. Workspace metadata stores relative paths; ignored secrets and symlinks are not followed. Native `fs.watch` events reach the browser through SSE. When the API is unavailable, the editor can continue using local backup data, although the resulting local JSON has not been server-validated.
 
 ## Planned direction
 

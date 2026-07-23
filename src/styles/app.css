@@ -1187,6 +1187,14 @@ button:disabled { cursor: not-allowed; opacity: .4; }
   justify-content: flex-end;
   gap: 8px;
 }
+.update-notes {
+  max-height: 180px;
+  margin: 0;
+  overflow: auto;
+  white-space: pre-wrap;
+  font: 11px/1.5 var(--font-mono);
+  color: var(--text-secondary);
+}
 
 .validation-row {
   display: flex;
