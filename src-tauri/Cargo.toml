@@ -1,6 +1,6 @@
 [package]
 name = "jsongui"
-version = "0.1.0"
+version = "0.1.1"
 description = "JsonGui local desktop shell"
 authors = ["two-tech-dev"]
 edition = "2021"
