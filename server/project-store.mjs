@@ -22,7 +22,8 @@ function documentId(document) {
 }
 
 export class ProjectStore {
-  constructor({ root, seed, catalogs, containers }) { this.root = root; this.seed = seed; this.catalogs = catalogs; this.containers = containers; this.projectsDir = path.join(root, "projects"); this.queues = new Map(); }
+  constructor({ root, seed, catalogs, containers, jsonSkills }) { this.root = root; this.seed = seed; this.catalogs = catalogs; this.containers = containers; this.jsonSkills = jsonSkills; this.projectsDir = path.join(root, "projects"); this.queues = new Map(); }
+  async validateJsonSkill(project) { if (project.jsonSkillId && this.jsonSkills && !(await this.jsonSkills.exists(project.jsonSkillId))) throw new ValidationError("Project validation failed", [{ path: "jsonSkillId", message: "JsonSkill was not found" }]); }
   file(id) { return path.join(this.projectsDir, `${id}.json`); }
   async initialize() {
     await mkdir(this.projectsDir, { recursive: true });
@@ -76,6 +77,7 @@ export class ProjectStore {
       try { await readFile(this.file(id)); throw Object.assign(new Error("Project already exists"), { code: "EXISTS" }); } catch (error) { if (error?.code !== "ENOENT") throw error; }
       const loaded = await this.catalogs.getVersion(version);
       if (!loaded) throw Object.assign(new Error("Pinned catalog not found"), { code: "CATALOG_NOT_FOUND" });
+      await this.validateJsonSkill(document);
       const project = validateProject({ ...document, revision: 1, updatedAt: new Date().toISOString() }, loaded.catalog, this.containers);
       await atomicJson(this.file(project.id), project, false);
       return { project, etag: etagFor(project) };
@@ -88,6 +90,7 @@ export class ProjectStore {
       if (current.etag !== expectedEtag) throw Object.assign(new Error("Project changed since it was loaded"), { code: "PRECONDITION" });
       const loaded = await this.catalogs.getVersion(version);
       if (!loaded) throw Object.assign(new Error("Pinned catalog not found"), { code: "CATALOG_NOT_FOUND" });
+      await this.validateJsonSkill(document);
       const project = validateProject({ ...document, id, revision: current.project.revision + 1, updatedAt: new Date().toISOString() }, loaded.catalog, this.containers);
       await atomicJson(this.file(id), project);
       return { project, etag: etagFor(project) };

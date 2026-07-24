@@ -46,7 +46,6 @@ export interface WorkspaceChangeEvent extends WorkspaceEvent {
 }
 
 export async function bootstrapSessionToken(): Promise<void> {
-  if (getWorkspaceSessionToken()) return;
   const response = await fetch(await apiUrl("/api/v1/session"), { headers: { Accept: "application/json" } });
   if (!response.ok) throw new Error("Cannot initialize JsonGui local session");
   const body = await response.json() as { sessionToken?: string };
@@ -84,6 +83,9 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<{ data:
   } finally { window.clearTimeout(timeout); }
 }
 
+export interface JsonSkillSummary { id: string; files: Array<{ name: string; bytes: number }>; fileCount: number; bytes: number; }
+export function listJsonSkills() { return request<JsonSkillSummary[]>("/api/v1/json-skills"); }
+
 export interface CatalogResponse {
   version: string;
   minecraftVersion: string;
@@ -95,7 +97,7 @@ export function getCatalog(version?: string) { return request<CatalogResponse>(v
 export function getProject(id: string) { return request<unknown>(`/api/v1/projects/${encodeURIComponent(id)}`); }
 export function createProject(document: unknown) { return request<unknown>("/api/v1/projects", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(document) }); }
 export function putProject(id: string, document: unknown, etag: string) { return request<unknown>(`/api/v1/projects/${encodeURIComponent(id)}`, { method: "PUT", headers: { "Content-Type": "application/json", "If-Match": etag }, body: JSON.stringify(document) }); }
-export function getCanonicalExport(id: string, includePrompts = true) { return request<unknown>(`/api/v1/projects/${encodeURIComponent(id)}/export?includePrompts=${includePrompts}`); }
+export function getCanonicalExport(id: string) { return request<unknown>(`/api/v1/projects/${encodeURIComponent(id)}/export`); }
 export function connectWorkspace(rootPath: string) { return request<WorkspaceResponse>("/api/v1/workspaces/connect", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ rootPath }) }); }
 export function getCurrentWorkspace() { return request<WorkspaceResponse>("/api/v1/workspaces/current"); }
 export function getWorkspace(workspaceId: string) { return request<WorkspaceResponse>(`/api/v1/workspaces/${encodeURIComponent(workspaceId)}`); }

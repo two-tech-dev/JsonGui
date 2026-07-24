@@ -14,7 +14,7 @@
     "targets": ["nsis", "msi"],
     "externalBin": ["binaries/node"],
     "createUpdaterArtifacts": true,
-    "resources": ["../server", "../shared", "../item", "../models"],
+    "resources": ["../server", "../shared", "../item", "../models", "../JsonSkill"],
     "icon": ["icons/icon.ico", "icons/icon.icns", "icons/128x128.png"]
   },
   "plugins": {

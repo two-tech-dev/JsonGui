@@ -38,7 +38,7 @@ import {
 import { PixelItemIcon } from "./components/PixelItemIcon";
 import { LibraryVirtualGrid } from "./components/LibraryVirtualGrid";
 import { PluginWorkspace } from "./components/PluginWorkspace";
-import { ApiError, bootstrapSessionToken, getCanonicalExport, getCatalog, getProject, putProject, putWorkspaceGui } from "./api/client";
+import { ApiError, bootstrapSessionToken, getCanonicalExport, getCatalog, getProject, getWorkspaceGui, listJsonSkills, putProject, putWorkspaceGui, type JsonSkillSummary } from "./api/client";
 import { canCheckForUpdates, checkForUpdate, downloadInstallAndRelaunch, type UpdateInfo, type UpdateProgress } from "./platform/updater";
 import {
   CONTAINERS,
@@ -60,6 +60,7 @@ import {
 } from "./domain/editor";
 import { mapJsonGuiToDeluxeMenus, serializeDeluxeMenus, generateExternalMenuSnippet } from "../shared/export/index";
 import { parse as parseYaml } from "yaml";
+import { parseMinecraftText } from "./domain/minecraftText";
 
 const categories = ["All", "Tools", "Decoration", "Combat", "Food", "Redstone", "Utility", "Misc"] as const;
 
@@ -123,7 +124,6 @@ function importDeluxeMenusYaml(yamlStr: string, catalog: ItemDefinition[]): Part
             amount: Number(val.amount) || 1,
             displayName: String(val.display_name || def?.name || "Item"),
             lore: Array.isArray(val.lore) ? val.lore.map(String) : [],
-            prompt: "",
             action,
             includeInExport: true
           });
@@ -186,7 +186,7 @@ function App() {
 
   // Local preferences
   const [placedSearch, setPlacedSearch] = useState("");
-  const [placedFilter, setPlacedFilter] = useState<"all" | "prompted" | "missing">("all");
+
   const [placedSort, setPlacedSort] = useState<"slot" | "name" | "material">("slot");
   const [placedDensity, setPlacedDensity] = useState<"comfortable" | "compact">("comfortable");
   const [librarySort, setLibrarySort] = useState<"name" | "material">("name");
@@ -329,6 +329,29 @@ function App() {
   }, [apiStatus]);
 
   useEffect(() => {
+    if (!etag || apiStatus === "loading" || apiStatus === "offline") return;
+    let cancelled = false;
+    const refresh = async () => {
+      if (cancelled || state.dirty || inFlight.current || apiStatus === "saving" || apiStatus === "conflict") return;
+      try {
+        const response = activeWorkspaceId ? await getWorkspaceGui(activeWorkspaceId, state.projectId) : await getProject(state.projectId);
+        if (cancelled || !response.etag || response.etag === etag) return;
+        const project = response.data as ProjectDocument;
+        const catalog = project.catalogVersion === state.catalogVersion ? state.catalog : (await getCatalog(project.catalogVersion)).data.items;
+        if (cancelled) return;
+        dispatch({ type: "HYDRATE", project, catalog });
+        setEtag(response.etag);
+        setApiStatus("saved");
+        setUndoStack([]);
+        setRedoStack([]);
+        dispatch({ type: "TOAST", toast: { message: "GUI đã cập nhật từ AI/MCP.", tone: "info" } });
+      } catch { /* retry next poll */ }
+    };
+    const interval = window.setInterval(() => void refresh(), 2_000);
+    return () => { cancelled = true; window.clearInterval(interval); };
+  }, [activeWorkspaceId, apiStatus, etag, state.catalog, state.catalogVersion, state.dirty, state.projectId]);
+
+  useEffect(() => {
     document.body.style.overflow = state.overlay || update ? "hidden" : "";
     return () => { document.body.style.overflow = ""; };
   }, [state.overlay, update]);
@@ -376,7 +399,7 @@ function App() {
         dispatch({ type: "SET_ZOOM", zoom: 1 });
       }
       if (event.key === "p" && state.selectedSlot !== null && state.placements[state.selectedSlot]) {
-        dispatch({ type: "OPEN_PROMPT", target: { kind: "placement", slot: state.selectedSlot } });
+        dispatch({ type: "OPEN_EDITOR", target: { kind: "placement", slot: state.selectedSlot } });
       }
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "r") {
         event.preventDefault();
@@ -401,11 +424,6 @@ function App() {
       const q = placedSearch.toLowerCase();
       list = list.filter((item) => item.displayName.toLowerCase().includes(q) || item.itemId.toLowerCase().includes(q));
     }
-    if (placedFilter === "prompted") {
-      list = list.filter((item) => item.prompt.trim());
-    } else if (placedFilter === "missing") {
-      list = list.filter((item) => !item.prompt.trim());
-    }
     if (placedSort === "name") {
       list.sort((a, b) => a.displayName.localeCompare(b.displayName));
     } else if (placedSort === "material") {
@@ -418,7 +436,7 @@ function App() {
       list.sort((a, b) => a.slot - b.slot);
     }
     return list;
-  }, [state.placements, state.catalog, placedSearch, placedFilter, placedSort]);
+  }, [state.placements, state.catalog, placedSearch, placedSort]);
 
   const sortedLibraryItems = useMemo(() => {
     const list = getFilteredItems(state);
@@ -429,8 +447,6 @@ function App() {
     }
     return list;
   }, [state.catalog, state.query, state.category, state.libraryTab, state.favorites, state.recentItemIds, librarySort]);
-
-  const promptCount = useMemo(() => Object.values(state.placements).filter((entry) => entry.prompt.trim()).length, [state.placements]);
 
   const placeItem = (slot: number, itemId: string) => {
     if (!isValidContainerSlot(slot, state.container)) {
@@ -492,7 +508,7 @@ function App() {
     <a className="skip-link" href="#workspace">Bỏ qua thanh công cụ</a>
     <AppHeader state={state} apiStatus={apiStatus} dispatch={dispatch} handleUndo={handleUndo} handleRedo={handleRedo} undoStack={undoStack} redoStack={redoStack} activityLog={activityLog} onOpenWorkspace={() => setAppMode("workspace")} />
     <div className="editor-layout">
-      <PlacedItemsPanel state={state} placedItems={placedItems} promptCount={promptCount} dispatch={dispatch} placedSearch={placedSearch} setPlacedSearch={setPlacedSearch} placedFilter={placedFilter} setPlacedFilter={setPlacedFilter} placedSort={placedSort} setPlacedSort={setPlacedSort} placedDensity={placedDensity} setPlacedDensity={setPlacedDensity} />
+      <PlacedItemsPanel state={state} placedItems={placedItems} dispatch={dispatch} placedSearch={placedSearch} setPlacedSearch={setPlacedSearch} placedSort={placedSort} setPlacedSort={setPlacedSort} placedDensity={placedDensity} setPlacedDensity={setPlacedDensity} />
       <main className="workspace" id="workspace">
         <div className="workspace-header-section">
           <div className="mobile-panel-buttons">
@@ -511,15 +527,14 @@ function App() {
           <div className="stat-pill"><strong>{state.container.slots}</strong> ô</div>
           <div className="stat-pill"><strong>{Object.keys(state.placements).length}</strong> đã đặt</div>
           <div className="stat-pill"><strong>{state.container.slots - Object.keys(state.placements).length}</strong> trống</div>
-          <div className="stat-pill stat-pill-prompts" style={{ marginLeft: "auto" }}><strong>{promptCount}</strong> prompt</div>
         </div>
       </main>
       <ItemLibraryPanel state={state} filteredItems={sortedLibraryItems} dispatch={dispatch} librarySort={librarySort} setLibrarySort={setLibrarySort} libraryDensity={libraryDensity} setLibraryDensity={setLibraryDensity} onQuickAdd={quickAdd} />
     </div>
-    {state.overlay === "prompt" && <PromptDrawer state={state} dispatch={dispatch} />}
+    {state.overlay === "drawer" && <ItemDrawer state={state} dispatch={dispatch} />}
     {state.overlay === "container" && <ContainerPicker state={state} dispatch={dispatch} />}
     {state.overlay === "export" && <ExportModal state={state} apiStatus={apiStatus} dispatch={dispatch} />}
-    {state.overlay === "placed" && <MobilePanel title="Item đã đặt" onClose={() => dispatch({ type: "CLOSE_OVERLAY" })}><PlacedItemsPanel state={state} placedItems={placedItems} promptCount={promptCount} dispatch={dispatch} placedSearch={placedSearch} setPlacedSearch={setPlacedSearch} placedFilter={placedFilter} setPlacedFilter={setPlacedFilter} placedSort={placedSort} setPlacedSort={setPlacedSort} placedDensity={placedDensity} setPlacedDensity={setPlacedDensity} embedded /></MobilePanel>}
+    {state.overlay === "placed" && <MobilePanel title="Item đã đặt" onClose={() => dispatch({ type: "CLOSE_OVERLAY" })}><PlacedItemsPanel state={state} placedItems={placedItems} dispatch={dispatch} placedSearch={placedSearch} setPlacedSearch={setPlacedSearch} placedSort={placedSort} setPlacedSort={setPlacedSort} placedDensity={placedDensity} setPlacedDensity={setPlacedDensity} embedded /></MobilePanel>}
     {state.overlay === "library" && <MobilePanel title="Minecraft items" onClose={() => dispatch({ type: "CLOSE_OVERLAY" })}><ItemLibraryPanel state={state} filteredItems={sortedLibraryItems} dispatch={dispatch} librarySort={librarySort} setLibrarySort={setLibrarySort} libraryDensity={libraryDensity} setLibraryDensity={setLibraryDensity} onQuickAdd={quickAdd} embedded /></MobilePanel>}
     {update && <UpdateModal update={update} onInstall={() => void installUpdate()} onClose={() => setUpdate(null)} onRetry={() => { setUpdate(null); void checkForUpdate().then((info) => { if (info) setUpdate({ info, phase: "available" }); }).catch(() => undefined); }} />}
     <ToastRegion state={state} dispatch={dispatch} handleUndo={undoToast} />
@@ -541,6 +556,7 @@ function AppHeader({ state, apiStatus, dispatch, handleUndo, handleRedo, undoSta
   const [showActivity, setShowActivity] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+  const [jsonSkills, setJsonSkills] = useState<JsonSkillSummary[]>([]);
   const [activeMenu, setActiveMenu] = useState<"file" | null>(null);
   const [showTemplates, setShowTemplates] = useState(false);
   const [templates, setTemplates] = useState<ProjectDocument[]>(() => {
@@ -676,7 +692,7 @@ function AppHeader({ state, apiStatus, dispatch, handleUndo, handleRedo, undoSta
         </div>}
       </div>
       <button className="secondary-button" onClick={onOpenWorkspace}><FolderOpen size={15} />Workspace</button>
-      <button className="icon-button" aria-label="Cài đặt dự án" title="Cài đặt dự án" onClick={() => setShowSettings(true)}><Settings size={16} /></button>
+       <button className="icon-button" aria-label="Cài đặt dự án" title="Cài đặt dự án" onClick={() => { setShowSettings(true); void listJsonSkills().then((response) => setJsonSkills(response.data)).catch(() => setJsonSkills([])); }}><Settings size={16} /></button>
       <button className="icon-button" aria-label="Trợ giúp" title="Trợ giúp · Ctrl + K" onClick={() => setShowHelp(true)}><CircleHelp size={16} /></button>
       <button className="primary-button" onClick={() => dispatch({ type: "OPEN_OVERLAY", overlay: "export" })}><Download size={16} />Export</button>
     </div>
@@ -692,6 +708,13 @@ function AppHeader({ state, apiStatus, dispatch, handleUndo, handleRedo, undoSta
           <label className="field-label">Độ phân giải hiển thị</label>
           <input className="text-input" value="Bình thường (CrispEdges)" readOnly />
         </section>
+        <section className="form-section">
+          <label className="field-label" htmlFor="json-skill">JsonSkill</label>
+          <select id="json-skill" className="text-input" value={state.jsonSkillId ?? ""} onChange={(event) => dispatch({ type: "SET_JSON_SKILL", jsonSkillId: event.target.value || undefined })}>
+            <option value="">Không dùng JsonSkill</option>
+            {jsonSkills.map((skill) => <option key={skill.id} value={skill.id}>{skill.id} · {skill.fileCount} file</option>)}
+          </select>
+        </section>
       </div>
       <footer className="modal-footer"><button className="primary-button" onClick={() => setShowSettings(false)}>Đóng</button></footer>
     </section></div>}
@@ -704,7 +727,6 @@ function AppHeader({ state, apiStatus, dispatch, handleUndo, handleRedo, undoSta
         <ul style={{ paddingLeft: 18, lineHeight: 1.6 }}>
           <li><kbd>Ctrl + Z</kbd> / <kbd>Ctrl + Y</kbd>: Hoàn tác / Làm lại hành động</li>
           <li><kbd>Ctrl + E</kbd>: Mở trình xuất JSON dự án</li>
-          <li><kbd>P</kbd>: Mở nhanh Prompt Editor cho slot được chọn</li>
           <li><kbd>Delete</kbd>: Xóa item trong slot được chọn</li>
           <li><kbd>Mũi tên</kbd>: Di chuyển vùng chọn slot</li>
         </ul>
@@ -779,7 +801,7 @@ function WorkspaceToolbar({ state, dispatch }: { state: EditorState; dispatch: D
   </>;
 }
 
-function PlacedItemsPanel({ state, placedItems, promptCount, dispatch, placedSearch, setPlacedSearch, placedFilter, setPlacedFilter, placedSort, setPlacedSort, placedDensity, setPlacedDensity, embedded = false }: { state: EditorState; placedItems: Array<EditorState["placements"][number]>; promptCount: number; dispatch: Dispatch<Parameters<typeof reducer>[1]>; placedSearch: string; setPlacedSearch: (v: string) => void; placedFilter: "all" | "prompted" | "missing"; setPlacedFilter: (v: "all" | "prompted" | "missing") => void; placedSort: "slot" | "name" | "material"; setPlacedSort: (v: "slot" | "name" | "material") => void; placedDensity: "comfortable" | "compact"; setPlacedDensity: (v: "comfortable" | "compact") => void; embedded?: boolean }) {
+function PlacedItemsPanel({ state, placedItems, dispatch, placedSearch, setPlacedSearch, placedSort, setPlacedSort, placedDensity, setPlacedDensity, embedded = false }: { state: EditorState; placedItems: Array<EditorState["placements"][number]>; dispatch: Dispatch<Parameters<typeof reducer>[1]>; placedSearch: string; setPlacedSearch: (v: string) => void; placedSort: "slot" | "name" | "material"; setPlacedSort: (v: "slot" | "name" | "material") => void; placedDensity: "comfortable" | "compact"; setPlacedDensity: (v: "comfortable" | "compact") => void; embedded?: boolean }) {
   const [editingSlot, setEditingSlot] = useState<number | null>(null);
   const [newSlotValue, setNewSlotValue] = useState<string>("");
   const [editingAmount, setEditingAmount] = useState<number | null>(null);
@@ -790,7 +812,6 @@ function PlacedItemsPanel({ state, placedItems, promptCount, dispatch, placedSea
       <div className="panel-heading"><div><h2>Placed items</h2><p className="panel-subtitle">{Object.keys(state.placements).length} items</p></div>{!embedded && <button className="icon-button" aria-label="Mở thư viện item" onClick={() => dispatch({ type: "OPEN_OVERLAY", overlay: "library" })}><Plus size={15} /></button>}</div>
       <label className="search-field"><Search size={15} /><input value={placedSearch} onChange={(e) => setPlacedSearch(e.target.value)} placeholder="Search placed items..." aria-label="Tìm item đã đặt" /></label>
       <div className="toolbar-row" style={{ flexWrap: "wrap", gap: 4 }}>
-        <select className="compact-select" value={placedFilter} onChange={(e) => setPlacedFilter(e.target.value as typeof placedFilter)} style={{ height: 28, fontSize: 11, padding: "0 4px" }}><option value="all">All</option><option value="prompted">Prompted</option><option value="missing">No prompt</option></select>
         <select className="compact-select" value={placedSort} onChange={(e) => setPlacedSort(e.target.value as typeof placedSort)} style={{ height: 28, fontSize: 11, padding: "0 4px" }}><option value="slot">Slot</option><option value="name">Name</option><option value="material">Material</option></select>
         <button className={`icon-button ${placedDensity === "compact" ? "active" : ""}`} style={{ width: 28, height: 28 }} title="Density" onClick={() => setPlacedDensity(placedDensity === "comfortable" ? "compact" : "comfortable")}><ListFilter size={13} /></button>
       </div>
@@ -802,9 +823,8 @@ function PlacedItemsPanel({ state, placedItems, promptCount, dispatch, placedSea
           const definition = getItem(placed.itemId, state.catalog);
           if (!definition) return null;
           const selected = state.selectedSlot === placed.slot;
-          const hasPrompt = Boolean(placed.prompt.trim());
           const isCompact = placedDensity === "compact";
-          return <button className={`placed-row ${selected ? "selected" : ""} ${isCompact ? "compact" : "comfortable"}`} key={placed.slot} onClick={() => { if (editingSlot === null && editingAmount === null) dispatch({ type: "OPEN_PROMPT", target: { kind: "placement", slot: placed.slot } }); }} draggable onDragStart={(event) => { event.dataTransfer.clearData(); event.dataTransfer.setData("text/plain", JSON.stringify({ source: "slot", slot: placed.slot })); event.dataTransfer.effectAllowed = "move"; }}>
+          return <button className={`placed-row ${selected ? "selected" : ""} ${isCompact ? "compact" : "comfortable"}`} key={placed.slot} onClick={() => { if (editingSlot === null && editingAmount === null) dispatch({ type: "OPEN_EDITOR", target: { kind: "placement", slot: placed.slot } }); }} draggable onDragStart={(event) => { event.dataTransfer.clearData(); event.dataTransfer.setData("text/plain", JSON.stringify({ source: "slot", slot: placed.slot })); event.dataTransfer.effectAllowed = "move"; }}>
             <div className="slot-badge" title={`Click to edit slot ${placed.slot}`} onClick={(e) => { e.stopPropagation(); if (editingSlot !== placed.slot) { setEditingSlot(placed.slot); setNewSlotValue(String(placed.slot)); } }}>
               {editingSlot === placed.slot ? (
                 <input
@@ -856,7 +876,7 @@ function PlacedItemsPanel({ state, placedItems, promptCount, dispatch, placedSea
               />
             ) : (
               <span className="badge amount-badge" title="Click to edit quantity" onClick={(e) => { e.stopPropagation(); setEditingAmount(placed.slot); setNewAmountValue(String(placed.amount)); }}>×{placed.amount}</span>
-            )}</span>{!isCompact && <span className="item-row-id" title={definition.material}>{definition.material}</span>}<span className="row-status" style={{ display: isCompact ? "none" : "flex" }}><i className={`prompt-dot ${hasPrompt ? "attached" : ""}`} />{hasPrompt ? "Prompt đã thêm" : "Chưa có prompt"}</span></span>
+            )}</span>{!isCompact && <span className="item-row-id" title={definition.material}>{definition.material}</span>}</span>
             <span className="row-actions"><MessageCircle size={14} aria-hidden="true" /><GripVertical size={15} aria-hidden="true" /></span>
           </button>;
         })}
@@ -866,12 +886,12 @@ function PlacedItemsPanel({ state, placedItems, promptCount, dispatch, placedSea
       <div className="summary-line">
         <span>{Object.keys(state.placements).length} placed · {state.container.slots - Object.keys(state.placements).length} empty</span>
       </div>
-      <div className="summary-line">
-        <span>{promptCount} prompt · sẵn sàng xuất</span>
-      </div>
-      <div className="progress"><i style={{ width: `${(promptCount / Math.max(1, Object.keys(state.placements).length)) * 100}%` }} /></div>
     </div>
   </aside>;
+}
+
+function MinecraftText({ value }: { value: string }) {
+  return <>{parseMinecraftText(value).map((part, index) => <span key={index} className={part.obfuscated ? "minecraft-obfuscated" : undefined} style={{ color: part.color, fontWeight: part.bold ? 700 : undefined, fontStyle: part.italic ? "italic" : undefined, textDecoration: [part.underline && "underline", part.strikethrough && "line-through"].filter(Boolean).join(" ") || undefined }}>{part.text}</span>)}</>;
 }
 
 function InventoryPreview({ state, dragSlot, setDragSlot, onDrop, dispatch }: { state: EditorState; dragSlot: number | null; setDragSlot: (slot: number | null) => void; onDrop: (event: DragEvent<HTMLButtonElement>, slot: number) => void; dispatch: Dispatch<Parameters<typeof reducer>[1]> }) {
@@ -898,7 +918,7 @@ function InventoryPreview({ state, dragSlot, setDragSlot, onDrop, dispatch }: { 
     if (state.container.id === "anvil") {
       return <div className="anvil-container" style={{ display: 'flex', flexDirection: 'column', gap: '12px', padding: '8px', alignItems: 'center' }}>
         <div className="anvil-rename" style={{ background: '#2c2c2d', border: '2px solid #555', borderRadius: '2px', height: '24px', width: '180px', padding: '2px 8px', color: '#fff', fontSize: '11px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <span>{state.title || "Repair & Name"}</span>
+          <span>{state.previewMode === "minecraft" ? <MinecraftText value={state.title || "Repair & Name"} /> : state.title || "Repair & Name"}</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '16px' }}>
           <InventorySlot slot={0} state={state} role={roleForSlot(0)} dragOver={dragSlot === 0} setDragSlot={setDragSlot} onDrop={onDrop} onKeyDown={onSlotKey} dispatch={dispatch} />
@@ -953,7 +973,7 @@ function InventoryPreview({ state, dragSlot, setDragSlot, onDrop, dispatch }: { 
 
   return <div className="preview-card">
     <div className="minecraft-frame" style={frameStyle}>
-      <div className="frame-label"><span>{state.container.bukkitId}</span><span>0–{Math.max(0, state.container.slots - 1)}</span></div>
+       <div className="frame-label"><span className="minecraft-gui-title"><MinecraftText value={state.title || state.container.bukkitId} /></span><button className="item-lock-all" onClick={() => dispatch({ type: "SET_ALL_ITEM_LOCKS", locked: !Object.values(state.placements).every((item) => item.locked !== false) })}><Lock size={11} />{Object.values(state.placements).every((item) => item.locked !== false) ? "Mở khóa tất cả" : "Khóa tất cả"}</button><span>0–{Math.max(0, state.container.slots - 1)}</span></div>
       {state.container.kind === "special" && state.showRoles && <div className="frame-label"><span>{state.container.role}</span><span>Special layout</span></div>}
       {renderContainerGrid()}
       {state.showPlayerInventory && state.container.kind !== "special" && <>
@@ -969,12 +989,13 @@ function InventorySlot({ slot, state, role, dragOver, setDragSlot, onDrop, onKey
   const placed = state.placements[slot];
   const definition = placed ? getItem(placed.itemId, state.catalog) : undefined;
   const selected = state.selectedSlot === slot;
-  const label = placed ? `Slot ${slot}, ${placed.displayName}, số lượng ${placed.amount}${placed.prompt ? ", có prompt" : ", chưa có prompt"}` : `Slot ${slot} trống, kéo item vào đây`;
-  return <button id={`container-slot-${slot}`} className={`inventory-slot ${selected ? "selected" : ""} ${dragOver ? "drag-over" : ""} ${placed?.enchantmentGlintOverride || placed?.enchantments?.length ? "enchanted" : ""}`} aria-label={label} aria-pressed={selected} title={placed ? `${definition?.material} · ${placed.prompt ? "Prompt đã thêm" : "Chưa có prompt"}` : `Slot ${slot} · Kéo item vào đây`} tabIndex={selected || (state.selectedSlot === null && slot === 0) ? 0 : -1} onClick={() => placed ? dispatch({ type: "OPEN_PROMPT", target: { kind: "placement", slot } }) : dispatch({ type: "SELECT_SLOT", slot })} onKeyDown={(event) => onKeyDown(event, slot)} draggable={Boolean(placed)} onDragStart={(event) => { if (!placed) return; event.dataTransfer.clearData(); event.dataTransfer.setData("text/plain", JSON.stringify({ source: "slot", slot })); event.dataTransfer.effectAllowed = "move"; }} onDragEnd={() => setDragSlot(null)} onDragEnter={(event) => { event.preventDefault(); setDragSlot(slot); }} onDragOver={(event) => { event.preventDefault(); setDragSlot(slot); }} onDragLeave={() => setDragSlot(null)} onDrop={(event) => onDrop(event, slot)}>
+  const label = placed ? `Slot ${slot}, ${placed.displayName}, số lượng ${placed.amount}` : `Slot ${slot} trống, kéo item vào đây`;
+  return <button id={`container-slot-${slot}`} className={`inventory-slot ${selected ? "selected" : ""} ${dragOver ? "drag-over" : ""} ${placed?.enchantmentGlintOverride || placed?.enchantments?.length ? "enchanted" : ""}`} aria-label={label} aria-pressed={selected} title={placed ? undefined : `Slot ${slot} · Kéo item vào đây`} tabIndex={selected || (state.selectedSlot === null && slot === 0) ? 0 : -1} onClick={() => placed ? dispatch({ type: "OPEN_EDITOR", target: { kind: "placement", slot } }) : dispatch({ type: "SELECT_SLOT", slot })} onKeyDown={(event) => onKeyDown(event, slot)} draggable={Boolean(placed)} onDragStart={(event) => { if (!placed) return; event.dataTransfer.clearData(); event.dataTransfer.setData("text/plain", JSON.stringify({ source: "slot", slot })); event.dataTransfer.effectAllowed = "move"; }} onDragEnd={() => setDragSlot(null)} onDragEnter={(event) => { event.preventDefault(); setDragSlot(slot); }} onDragOver={(event) => { event.preventDefault(); setDragSlot(slot); }} onDragLeave={() => setDragSlot(null)} onDrop={(event) => onDrop(event, slot)}>
     {definition && <PixelItemIcon kind={definition.icon} label={definition.name} size={Math.max(18, Math.round(27 * state.zoom))} />}
     {state.previewMode === "editor" && state.showSlotNumbers && <span className="slot-number">{slot}</span>}
     {placed && placed.amount > 1 && <span className="quantity">{placed.amount}</span>}
     {role && state.showRoles && state.previewMode === "editor" && <span className="slot-number">{role}</span>}
+    {placed && <span className="minecraft-tooltip"><strong><MinecraftText value={placed.displayName} /></strong>{placed.lore.map((line, index) => <span key={index}><MinecraftText value={line} /></span>)}</span>}
   </button>;
 }
 
@@ -986,7 +1007,7 @@ function ItemLibraryPanel({ state, filteredItems, dispatch, librarySort, setLibr
   const LibraryCard = useMemo(() => {
     return function LibraryCard({ definition, selected, isCompact, dispatch, favorites }: { definition: ItemDefinition; selected: boolean; isCompact: boolean; dispatch: Dispatch<Parameters<typeof reducer>[1]>; favorites: string[] }) {
       const isFavorite = favorites.includes(definition.id);
-      return <article className={`library-card ${selected ? "selected" : ""} ${isCompact ? "compact" : "comfortable"}`} tabIndex={0} draggable onDragStart={(event) => { event.dataTransfer.clearData(); event.dataTransfer.setData("text/plain", JSON.stringify({ source: "library", itemId: definition.id })); event.dataTransfer.effectAllowed = "copy"; }} onDragEnd={() => undefined} onClick={() => dispatch({ type: "OPEN_PROMPT", target: { kind: "library", itemId: definition.id } })} onKeyDown={(event) => { if (event.key === "Enter") dispatch({ type: "OPEN_PROMPT", target: { kind: "library", itemId: definition.id } }); }}>
+      return <article className={`library-card ${selected ? "selected" : ""} ${isCompact ? "compact" : "comfortable"}`} tabIndex={0} draggable onDragStart={(event) => { event.dataTransfer.clearData(); event.dataTransfer.setData("text/plain", JSON.stringify({ source: "library", itemId: definition.id })); event.dataTransfer.effectAllowed = "copy"; }} onDragEnd={() => undefined} onClick={() => dispatch({ type: "OPEN_EDITOR", target: { kind: "library", itemId: definition.id } })} onKeyDown={(event) => { if (event.key === "Enter") dispatch({ type: "OPEN_EDITOR", target: { kind: "library", itemId: definition.id } }); }}>
         <button className={`card-action ${isFavorite ? "favorited" : ""}`} aria-label={`Yêu thích ${definition.name}`} onClick={(event) => { event.stopPropagation(); dispatch({ type: "TOGGLE_FAVORITE", itemId: definition.id }); }}><span style={{ color: isFavorite ? "#ffd54c" : "var(--text-tertiary)" }}>★</span></button>
         <button className="card-action-add" aria-label={`Thêm ${definition.name}`} onClick={(event) => { event.stopPropagation(); onQuickAdd(definition.id); }}><Plus size={14} style={{ color: "#06130f" }} /></button>
         <span className="library-icon-wrap"><PixelItemIcon kind={definition.icon} label={definition.name} size={isCompact ? 24 : 34} /></span>
@@ -1025,32 +1046,28 @@ function ActionFields({ action, catalog, onChange }: { action: EditorState["draf
   return null;
 }
 
-function PromptDrawer({ state, dispatch }: { state: EditorState; dispatch: Dispatch<Parameters<typeof reducer>[1]> }) {
-  const libraryItem = state.promptTarget?.kind === "library" ? getItem(state.promptTarget.itemId, state.catalog) : undefined;
-  const current = state.promptTarget?.kind === "placement" ? state.placements[state.promptTarget.slot] : undefined;
+function ItemDrawer({ state, dispatch }: { state: EditorState; dispatch: Dispatch<Parameters<typeof reducer>[1]> }) {
+  const libraryItem = state.editorTarget?.kind === "library" ? getItem(state.editorTarget.itemId, state.catalog) : undefined;
+  const current = state.editorTarget?.kind === "placement" ? state.placements[state.editorTarget.slot] : undefined;
   const activeItem = current;
   const definition = activeItem ? getItem(activeItem.itemId, state.catalog) : libraryItem;
-  const isLibraryDraft = state.promptTarget?.kind === "library";
-  const activePrompt = isLibraryDraft && state.promptTarget?.kind === "library" ? state.itemDefaults[state.promptTarget.itemId]?.prompt ?? "" : activeItem?.prompt ?? "";
-  const openTemplate = (template: string) => dispatch({ type: "SET_PROMPT_DRAFT", prompt: template });
-  return <div className="overlay-scrim" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) dispatch({ type: "CLOSE_OVERLAY" }); }}><aside className="drawer" role="dialog" aria-modal="true" aria-labelledby="prompt-title">
-    <div className="drawer-header"><div className="drawer-header-top"><div><span className="drawer-breadcrumb">{isLibraryDraft ? `Draft item / ${definition?.name ?? "Item"}` : `Item / ${definition?.name ?? "Draft item"} / Slot ${activeItem?.slot ?? "—"}`}</span><h2 id="prompt-title">Prompt editor</h2></div><button className="icon-button" aria-label="Đóng prompt editor" onClick={() => dispatch({ type: "CLOSE_OVERLAY" })}><X size={18} /></button></div>
-      {definition ? <div className="drawer-meta"><PixelItemIcon kind={definition.icon} size={38} /><div className="drawer-meta-text"><strong>{isLibraryDraft ? definition.name : activeItem?.displayName}</strong><code>{definition.material} · {isLibraryDraft ? "Draft item" : `Slot ${activeItem?.slot}`}</code></div><span className={`badge ${activePrompt ? "emerald" : "warning"}`}>{activePrompt ? "Prompt attached" : "No prompt"}</span></div> : <div className="empty-state"><MessageCircle size={24} /><strong>Chọn một item để chỉnh sửa</strong><p>Click item ở panel trái hoặc slot trong preview.</p></div>}
-      <div className="drawer-tabs" role="tablist">{(["Details", "Prompt", ...(activeItem ? ["DeluxeMenus" as const] : []), "JSON"] as const).map((tab) => <button key={tab} className={`drawer-tab ${state.drawerTab === tab ? "active" : ""}`} onClick={() => dispatch({ type: "SET_DRAWER_TAB", tab })}>{tab}</button>)}</div>
+  const isLibraryDraft = state.editorTarget?.kind === "library";
+  return <div className="overlay-scrim" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) dispatch({ type: "CLOSE_OVERLAY" }); }}><aside className="drawer" role="dialog" aria-modal="true" aria-labelledby="item-title">
+    <div className="drawer-header"><div className="drawer-header-top"><div><span className="drawer-breadcrumb">{isLibraryDraft ? `Draft item / ${definition?.name ?? "Item"}` : `Item / ${definition?.name ?? "Draft item"} / Slot ${activeItem?.slot ?? "—"}`}</span><h2 id="item-title">Item editor</h2></div><button className="icon-button" aria-label="Đóng item editor" onClick={() => dispatch({ type: "CLOSE_OVERLAY" })}><X size={18} /></button></div>
+      {definition ? <div className="drawer-meta"><PixelItemIcon kind={definition.icon} size={38} /><div className="drawer-meta-text"><strong>{isLibraryDraft ? definition.name : activeItem?.displayName}</strong><code>{definition.material} · {isLibraryDraft ? "Draft item" : `Slot ${activeItem?.slot}`}</code></div></div> : <div className="empty-state"><MessageCircle size={24} /><strong>Chọn một item để chỉnh sửa</strong><p>Click item ở panel trái hoặc slot trong preview.</p></div>}
+      <div className="drawer-tabs" role="tablist">{(["Details", ...(activeItem ? ["DeluxeMenus" as const] : []), "JSON"] as const).map((tab) => <button key={tab} className={`drawer-tab ${state.drawerTab === tab ? "active" : ""}`} onClick={() => dispatch({ type: "SET_DRAWER_TAB", tab })}>{tab}</button>)}</div>
     </div>
     {definition && (isLibraryDraft || activeItem) && <div className="drawer-body">
-      {state.drawerTab === "Prompt" && <>
-        <section className="form-section prompt-box"><h3><Code2 size={16} />Item behavior prompt <span className="badge emerald">Vibe code ready</span></h3><p className="helper">Mô tả hành vi mong muốn cho item này. Dữ liệu dùng cho coding assistant sau này, không tự chạy trong editor.</p><label className="field-label" htmlFor="behavior-prompt">Hành vi khi người chơi tương tác</label><textarea id="behavior-prompt" className="textarea" value={state.draftPrompt} placeholder="Khi người chơi nhấn item, mở menu nhiệm vụ..." maxLength={2000} onChange={(event) => dispatch({ type: "SET_PROMPT_DRAFT", prompt: event.target.value })} /><div className="prompt-quality"><span>{state.draftPrompt.length} / 2000</span><strong>{state.draftPrompt.length > 52 ? "Đã hoàn thiện" : "Thiếu chi tiết"}</strong></div><div className="chip-row"><button className="variable-chip" onClick={() => openTemplate("Khi người chơi nhấn, mở menu khác")}>Mở menu khác</button><button className="variable-chip" onClick={() => openTemplate("Chạy lệnh server với {player}")}>Chạy lệnh server</button><button className="variable-chip" onClick={() => openTemplate("Dịch chuyển {player} đến khu vực chỉ định")}>Dịch chuyển</button></div></section>
-        <section className="form-section"><h3>Action mapping</h3><label className="field-label" htmlFor="action-type">Loại hành động</label><select className="drawer-select" id="action-type" value={state.draftAction.type} onChange={(event) => { const type = event.target.value; const action = type === "open_gui" ? { type, guiId: "menu-id" } : type === "run_command" ? { type, command: "/say {player}" } : type === "send_message" ? { type, message: "Xin chào {player}" } : type === "give_item" ? { type, material: state.catalog[0]?.material ?? "DIAMOND", amount: 1 } : type === "teleport" ? { type, world: "world", x: 0, y: 64, z: 0 } : { type }; dispatch({ type: "SET_DRAFT_ACTION", action: action as EditorState["draftAction"] }); }}><option value="prompt_only">Prompt only</option><option value="run_command">Run command</option><option value="open_gui">Open another GUI</option><option value="give_item">Give item</option><option value="teleport">Teleport</option><option value="send_message">Send message</option><option value="close_inventory">Close inventory</option></select><ActionFields action={state.draftAction} catalog={state.catalog} onChange={(action) => dispatch({ type: "SET_DRAFT_ACTION", action })} /><div className="chip-row"><span className="variable-chip">{'{player}'}</span><span className="variable-chip">{'{slot}'}</span><span className="variable-chip">{'{world}'}</span><span className="variable-chip">{'{server}'}</span></div></section>
+      {state.drawerTab === "Details" && <>
+        <section className="form-section"><h3>Action mapping</h3><label className="field-label" htmlFor="action-type">Loại hành động</label><select className="drawer-select" id="action-type" value={state.draftAction.type} onChange={(event) => { const type = event.target.value; const action = type === "open_gui" ? { type, guiId: "menu-id" } : type === "run_command" ? { type, command: "/say {player}" } : type === "send_message" ? { type, message: "Xin chào {player}" } : type === "give_item" ? { type, material: state.catalog[0]?.material ?? "DIAMOND", amount: 1 } : type === "teleport" ? { type, world: "world", x: 0, y: 64, z: 0 } : { type }; dispatch({ type: "SET_DRAFT_ACTION", action: action as EditorState["draftAction"] }); }}><option value="prompt_only">Không có action</option><option value="run_command">Run command</option><option value="open_gui">Open another GUI</option><option value="give_item">Give item</option><option value="teleport">Teleport</option><option value="send_message">Send message</option><option value="close_inventory">Close inventory</option></select><ActionFields action={state.draftAction} catalog={state.catalog} onChange={(action) => dispatch({ type: "SET_DRAFT_ACTION", action })} /><div className="chip-row"><span className="variable-chip">{'{player}'}</span><span className="variable-chip">{'{slot}'}</span><span className="variable-chip">{'{world}'}</span><span className="variable-chip">{'{server}'}</span></div></section>
         <section className="form-section"><h3>Developer notes</h3><p className="helper">Ghi chú riêng, mặc định không đưa vào JSON.</p><textarea className="textarea" style={{ minHeight: 80 }} value={state.draftDeveloperNotes} maxLength={2000} onChange={(event) => dispatch({ type: "SET_DRAFT_NOTES", notes: event.target.value })} placeholder="Ví dụ: kiểm tra permission trước khi mở shop" /></section>
-      </>}
-      {state.drawerTab === "Details" && activeItem && <>
-        <section className="form-section"><label className="field-label" htmlFor="item-name">Tên hiển thị</label><input className="text-input" id="item-name" value={state.draftTitle} onChange={(event) => dispatch({ type: "SET_DRAFT_TITLE", title: event.target.value })} /></section><section className="form-section"><label className="field-label">Material ID <Lock size={12} /></label><input className="text-input" value={definition.material} readOnly /></section><section className="form-section"><label className="field-label" htmlFor="quantity">Số lượng</label><input className="text-input" id="quantity" type="number" min="1" max={definition.maxStack} value={activeItem.amount} onChange={(event) => dispatch({ type: "SET_AMOUNT", slot: activeItem.slot, amount: Number(event.target.value) })} /></section><section className="form-section"><label className="field-label" htmlFor="lore">Lore</label><textarea className="textarea" id="lore" value={state.draftLore.join("\n")} maxLength={4000} onChange={(event) => dispatch({ type: "SET_DRAFT_LORE", lore: event.target.value.split("\n").slice(0, 20) })} placeholder="Mỗi dòng là một lore line..." style={{ minHeight: 90 }} /></section>
-      </>}
+      {activeItem && <>
+        <section className="form-section"><button className="ghost-button" onClick={() => dispatch({ type: "SET_ITEM_LOCK", slot: activeItem.slot, locked: activeItem.locked === false })}><Lock size={14} />{activeItem.locked !== false ? "Mở khóa item" : "Khóa item"}</button><p className="helper">Item khóa không thể bị lấy khỏi GUI trong JsonGuiLoader.</p></section><section className="form-section"><label className="field-label" htmlFor="item-name">Tên hiển thị</label><input className="text-input" id="item-name" value={state.draftTitle} onChange={(event) => dispatch({ type: "SET_DRAFT_TITLE", title: event.target.value })} /></section><section className="form-section"><label className="field-label">Material ID <Lock size={12} /></label><input className="text-input" value={definition.material} readOnly /></section><section className="form-section"><label className="field-label" htmlFor="quantity">Số lượng</label><input className="text-input" id="quantity" type="number" min="1" max={definition.maxStack} value={activeItem.amount} onChange={(event) => dispatch({ type: "SET_AMOUNT", slot: activeItem.slot, amount: Number(event.target.value) })} /></section><section className="form-section"><label className="field-label" htmlFor="lore">Lore</label><textarea className="textarea" id="lore" value={state.draftLore.join("\n")} maxLength={4000} onChange={(event) => dispatch({ type: "SET_DRAFT_LORE", lore: event.target.value.split("\n").slice(0, 20) })} placeholder="Mỗi dòng là một lore line..." style={{ minHeight: 90 }} /></section>
+      </>}</>}
       {state.drawerTab === "DeluxeMenus" && activeItem && <DeluxeMenusItemFields state={state} dispatch={dispatch} />}
       {state.drawerTab === "JSON" && activeItem && <section className="form-section"><h3>Preview export item</h3><pre className="json-code">{JSON.stringify({ ...activeItem, material: definition.material }, null, 2)}</pre></section>}
     </div>}
-    <div className="drawer-footer"><button className="ghost-button" onClick={() => dispatch({ type: "CLOSE_OVERLAY" })}>Hủy</button><div>{!isLibraryDraft && <button className="icon-button" aria-label="Xóa item" title="Xóa item" onClick={() => { if (activeItem) dispatch({ type: "REMOVE_ITEM", slot: activeItem.slot }); dispatch({ type: "CLOSE_OVERLAY" }); }}><Trash2 size={16} /></button>}<button className="primary-button" disabled={!definition} onClick={() => { dispatch({ type: "SAVE_PROMPT" }); dispatch({ type: "CLOSE_OVERLAY" }); }}><Save size={16} />Lưu item</button></div></div>
+    <div className="drawer-footer"><button className="ghost-button" onClick={() => dispatch({ type: "CLOSE_OVERLAY" })}>Hủy</button><div>{!isLibraryDraft && <button className="icon-button" aria-label="Xóa item" title="Xóa item" onClick={() => { if (activeItem) dispatch({ type: "REMOVE_ITEM", slot: activeItem.slot }); dispatch({ type: "CLOSE_OVERLAY" }); }}><Trash2 size={16} /></button>}<button className="primary-button" disabled={!definition} onClick={() => { dispatch({ type: "SAVE_ITEM" }); dispatch({ type: "CLOSE_OVERLAY" }); }}><Save size={16} />Lưu item</button></div></div>
   </aside></div>;
 }
 
@@ -1117,7 +1134,7 @@ function ExportModal({ state, apiStatus, dispatch }: { state: EditorState; apiSt
   const [filename, setFilename] = useState(defaultSanitizedName);
   const [menuId, setMenuId] = useState(defaultSanitizedName);
 
-  const [includePrompt, setIncludePrompt] = useState(true);
+  const [cancelItemMovement, setCancelItemMovement] = useState(true);
   const [exportFormat, setExportFormat] = useState<ExportFormat>("json");
   const deluxeMenusConfig = state.deluxeMenus;
   const setDeluxeMenusConfig = (patch: Partial<EditorState["deluxeMenus"]>) => dispatch({ type: "SET_DELUXE_MENUS_MENU", config: { ...deluxeMenusConfig, ...patch } });
@@ -1127,7 +1144,7 @@ function ExportModal({ state, apiStatus, dispatch }: { state: EditorState; apiSt
     try { setDeluxeMenusConfig({ openRequirement: value.trim() ? JSON.parse(value) : undefined }); }
     catch { dispatch({ type: "TOAST", toast: { message: "Open requirement JSON không hợp lệ", tone: "error" } }); }
   };
-  const [json, setJson] = useState(() => buildExport(state, { includePrompts: true }));
+  const [json, setJson] = useState(() => buildExport(state, { cancelItemMovement: true }));
 
   const handleMenuIdChange = (val: string) => {
     const sanitized = val
@@ -1143,7 +1160,7 @@ function ExportModal({ state, apiStatus, dispatch }: { state: EditorState; apiSt
   };
 
   const deluxemenusExport = useMemo(() => {
-    const exportData = JSON.parse(buildExport(state, { includePrompts: includePrompt }));
+    const exportData = JSON.parse(buildExport(state, { cancelItemMovement }));
     const items = Object.values(state.placements)
       .filter((entry) => entry.includeInExport !== false && isValidContainerSlot(entry.slot, state.container))
       .sort((a, b) => a.slot - b.slot)
@@ -1164,22 +1181,21 @@ function ExportModal({ state, apiStatus, dispatch }: { state: EditorState; apiSt
       menuId: menuId || undefined,
       openCommand: deluxeMenusConfig.openCommand || undefined,
       registerCommand: deluxeMenusConfig.registerCommand,
-      includePrompts: includePrompt,
       emitEmptyOpenCommand: true,
     });
-  }, [state, includePrompt, menuId]);
+  }, [state, cancelItemMovement, menuId, deluxeMenusConfig.openCommand, deluxeMenusConfig.registerCommand]);
 
   useEffect(() => {
     if (exportFormat === "json") {
       if (apiStatus === "offline" || apiStatus === "conflict" || apiStatus === "saving" || state.dirty) {
-        setJson(buildExport(state, { includePrompts: includePrompt }));
+        setJson(buildExport(state, { cancelItemMovement }));
         return;
       }
-      getCanonicalExport(state.projectId, includePrompt)
-        .then((response) => setJson(JSON.stringify(response.data, null, 2)))
-        .catch(() => setJson(buildExport(state, { includePrompts: includePrompt })));
+      getCanonicalExport(state.projectId)
+        .then((response) => setJson(JSON.stringify({ ...(response.data as object), cancelItemMovement }, null, 2)))
+        .catch(() => setJson(buildExport(state)));
     }
-  }, [state, apiStatus, includePrompt, exportFormat]);
+  }, [state, apiStatus, cancelItemMovement, exportFormat]);
 
   const exportContent = exportFormat === "json" ? json : serializeDeluxeMenus(deluxemenusExport.document);
   const lines = exportContent.split("\n");
@@ -1211,7 +1227,7 @@ function ExportModal({ state, apiStatus, dispatch }: { state: EditorState; apiSt
   const canDownload = exportFormat === "json" || !hasValidationErrors;
 
   return <div className="overlay-scrim modal-wrap" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) dispatch({ type: "CLOSE_OVERLAY" }); }}><section className="modal" role="dialog" aria-modal="true" aria-labelledby="export-title">
-    <header className="modal-header"><div><h2 id="export-title">{exportFormat === "json" ? "Xuất GUI dưới dạng JSON" : "Xuất GUI cho DeluxeMenus"}</h2><p>{exportFormat === "json" ? "Xuất cấu hình container, item, action và prompt cho plugin Java." : "Xuất file YAML tương thích với plugin DeluxeMenus."}</p></div><button className="icon-button" aria-label="Đóng export" onClick={() => dispatch({ type: "CLOSE_OVERLAY" })}><X size={18} /></button></header>
+    <header className="modal-header"><div><h2 id="export-title">{exportFormat === "json" ? "Xuất GUI dưới dạng JSON" : "Xuất GUI cho DeluxeMenus"}</h2><p>{exportFormat === "json" ? "Xuất cấu hình container, item và action cho plugin Java." : "Xuất file YAML tương thích với plugin DeluxeMenus."}</p></div><button className="icon-button" aria-label="Đóng export" onClick={() => dispatch({ type: "CLOSE_OVERLAY" })}><X size={18} /></button></header>
     <div className="modal-body">
       <div className="toolbar-row" style={{ marginBottom: 12 }}>
         <div className="mode-toggle" role="group" aria-label="Chọn định dạng xuất">
@@ -1244,7 +1260,7 @@ function ExportModal({ state, apiStatus, dispatch }: { state: EditorState; apiSt
       </div>}
       <div className={`validation-row ${apiStatus === "offline" || apiStatus === "conflict" || state.dirty || apiStatus === "saving" ? "warning" : ""}`}>
         {apiStatus === "offline" || apiStatus === "conflict" || state.dirty || apiStatus === "saving" ? <AlertTriangle size={16} /> : <CheckCircle2 size={16} />}
-        <span><strong>{Object.values(state.placements).filter((item) => item.includeInExport !== false).length} item hợp lệ</strong> · {Object.values(state.placements).filter((item) => item.prompt.trim()).length} item đã có prompt · {apiStatus === "offline" || apiStatus === "conflict" || state.dirty || apiStatus === "saving" ? "Chưa được server validate" : "Backend canonical"}</span>
+        <span><strong>{Object.values(state.placements).filter((item) => item.includeInExport !== false).length} item hợp lệ</strong> · {apiStatus === "offline" || apiStatus === "conflict" || state.dirty || apiStatus === "saving" ? "Chưa được server validate" : "Backend canonical"}</span>
       </div>
       {exportFormat === "deluxemenus" && deluxemenusExport.validation.issues.length > 0 && <div className="validation-row" style={{ marginTop: 8, flexDirection: "column", alignItems: "flex-start" }}>
         {deluxemenusExport.validation.issues.map((issue, idx) => <div key={idx} style={{ display: "flex", alignItems: "center", gap: 6, color: issue.severity === "error" ? "var(--status-error)" : "var(--status-warning)" }}>
@@ -1257,7 +1273,7 @@ function ExportModal({ state, apiStatus, dispatch }: { state: EditorState; apiSt
         <label className="select-control">Tên file <input value={filename} onChange={(event) => { if (exportFormat === "deluxemenus") { handleMenuIdChange(event.target.value); } else { setFilename(event.target.value); } }} aria-label="Tên file" style={{ width: 120, background: "transparent", border: 0, outline: 0 }} /><span>.{exportFormat === "json" ? "json" : "yml"}</span></label>
       </div>
       <div className="toolbar-row" style={{ marginBottom: 14 }}>
-        <button className="ghost-button" onClick={() => setIncludePrompt(!includePrompt)}>{includePrompt ? <Check size={14} /> : <X size={14} />}Bao gồm prompt vibe code</button>
+        {exportFormat === "json" && <button className="ghost-button" onClick={() => setCancelItemMovement(!cancelItemMovement)}>{cancelItemMovement ? <Check size={14} /> : <X size={14} />}Khóa lấy item khỏi GUI</button>}
       </div>
       <div className="code-box"><div className="line-numbers">{lines.map((_, index) => <div key={index}>{index + 1}</div>)}</div><pre className="json-code">{lines.map((line, index) => <div key={index}>{exportFormat === "json" ? highlightJson(line) : line}</div>)}</pre></div>
       {exportFormat === "deluxemenus" && <div style={{ marginTop: 12, padding: 12, background: "var(--surface-elevated)", borderRadius: 6 }}>
@@ -1265,7 +1281,7 @@ function ExportModal({ state, apiStatus, dispatch }: { state: EditorState; apiSt
         <pre style={{ margin: 0, fontSize: 11, fontFamily: "monospace", whiteSpace: "pre-wrap" }}>{generateExternalMenuSnippet(menuId || "menu")}</pre>
         <p className="helper" style={{ fontSize: 11, marginTop: 8 }}>Thêm đoạn trên vào <code>plugins/DeluxeMenus/config.yml</code> để đăng ký menu.</p>
       </div>}
-      <div className="schema-note"><strong>Schema:</strong> {exportFormat === "json" ? <><code>type</code>, <code>title</code>, <code>rows</code>, <code>items[].slot</code>, <code>material</code>, <code>amount</code>, <code>prompt</code>, <code>action</code></> : <><code>menu_title</code>, <code>size</code>, <code>items</code>, <code>left_click_commands</code></>}. Player inventory không có trong export.</div>
+      <div className="schema-note"><strong>Schema:</strong> {exportFormat === "json" ? <><code>type</code>, <code>title</code>, <code>rows</code>, <code>items[].slot</code>, <code>material</code>, <code>amount</code>, <code>action</code></> : <><code>menu_title</code>, <code>size</code>, <code>items</code>, <code>left_click_commands</code></>}. Player inventory không có trong export.</div>
     </div>
     <footer className="modal-footer">
       <button className="ghost-button" onClick={() => dispatch({ type: "CLOSE_OVERLAY" })}>Đóng</button>

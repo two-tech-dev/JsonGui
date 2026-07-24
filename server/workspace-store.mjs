@@ -57,7 +57,7 @@ function defaultWorkspace(project) {
   };
 }
 function defaultManifest(project) {
-  const allowed = ["projectName", "platform", "language", "buildSystem", "javaVersion", "minecraftVersion", "sourceRoots", "resourceRoot", "mainClass", "basePackage", "metadataFile", "issues"];
+  const allowed = ["projectName", "platform", "language", "buildSystem", "javaVersion", "minecraftVersion", "sourceRoots", "resourceRoot", "mainClass", "basePackage", "metadataFile", "issues", "jsonSkillId"];
   return { schemaVersion: 1, ...Object.fromEntries(allowed.filter((key) => project[key] !== undefined).map((key) => [key, project[key]])) };
 }
 

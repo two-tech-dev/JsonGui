@@ -1,7 +1,7 @@
 export type ItemCategory = "Tools" | "Decoration" | "Combat" | "Food" | "Redstone" | "Utility" | "Misc";
 export type PreviewMode = "editor" | "minecraft";
-export type Overlay = "prompt" | "container" | "export" | "placed" | "library" | null;
-export type PromptTarget = { kind: "library"; itemId: string } | { kind: "placement"; slot: number } | null;
+export type Overlay = "drawer" | "container" | "export" | "placed" | "library" | null;
+export type EditorTarget = { kind: "library"; itemId: string } | { kind: "placement"; slot: number } | null;
 
 export interface ContainerSpec { id: string; label: string; bukkitId: string; slots: number; rows: number; columns: number; kind: "grid" | "hopper" | "special"; compatibility: "Direct" | "Special" | "Unavailable"; category: "Storage" | "Processing" | "Utility" | "Entity"; role?: string; }
 export interface ItemDefinition { id: string; name: string; material: string; category: ItemCategory; icon: string; maxStack: number; description: string; }
@@ -39,11 +39,11 @@ export interface DeluxeMenusItemConfig {
   shiftRightClickRequirement?: Record<string, unknown>;
 }
 export interface DeluxeMenusMenuConfig { openCommand?: string; registerCommand?: boolean; updateInterval?: number; openCommands?: string[]; closeCommands?: string[]; openRequirement?: Record<string, unknown>; }
-export interface ItemDefault { prompt: string; action: ItemAction; developerNotes?: string; }
-export interface PlacedItem extends DeluxeMenusItemConfig { slot: number; itemId: string; amount: number; displayName: string; lore: string[]; prompt: string; action: ItemAction; developerNotes?: string; includeInExport?: boolean; }
-export interface ProjectDocument { schemaVersion: 1; id: string; revision: number; catalogVersion: string; title: string; description: string; containerId: string; itemDefaults: Record<string, ItemDefault>; placements: PlacedItem[]; deluxeMenus?: DeluxeMenusMenuConfig; updatedAt: string; }
+export interface ItemDefault { action: ItemAction; developerNotes?: string; }
+export interface PlacedItem extends DeluxeMenusItemConfig { slot: number; itemId: string; amount: number; displayName: string; lore: string[]; action: ItemAction; developerNotes?: string; includeInExport?: boolean; locked?: boolean; }
+export interface ProjectDocument { schemaVersion: 1; id: string; revision: number; catalogVersion: string; title: string; description: string; containerId: string; jsonSkillId?: string; itemDefaults: Record<string, ItemDefault>; placements: PlacedItem[]; deluxeMenus?: DeluxeMenusMenuConfig; updatedAt: string; }
 
-const IMPORT_LIMITS = { title: 120, displayName: 120, loreLine: 200, loreLines: 20, prompt: 2000, actionText: 500, enchantment: 120, itemFlag: 120, command: 500 };
+const IMPORT_LIMITS = { title: 120, displayName: 120, loreLine: 200, loreLines: 20, actionText: 500, enchantment: 120, itemFlag: 120, command: 500 };
 const DELUXE_ITEM_KEYS = ["damage", "modelData", "modelDataComponent", "itemModel", "priority", "update", "slots", "enchantments", "itemFlags", "hideTooltip", "enchantmentGlintOverride", "unbreakable", "hideAttributes", "hideEnchantments", "rightClickCommands", "shiftLeftClickCommands", "shiftRightClickCommands", "middleClickCommands", "viewRequirement", "leftClickRequirement", "rightClickRequirement", "shiftLeftClickRequirement", "shiftRightClickRequirement"] as const;
 
 function importObject(value: unknown): Record<string, unknown> | null { return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null; }
@@ -152,9 +152,9 @@ export function canonicalExportToProject(value: unknown, base: Pick<ProjectDocum
     const itemId = importText(item.itemId, `Item ID ${index + 1}`, 200); const definition = catalogById.get(itemId); if (!definition) throw new Error(`Item ${itemId} không có trong catalog`); if (item.material !== definition.material) throw new Error(`Material của ${itemId} không khớp catalog`);
     const amount = importInteger(item.amount, `Số lượng item ${index + 1}`, 1, definition.maxStack); const displayName = importText(item.displayName, `Tên item ${index + 1}`, IMPORT_LIMITS.displayName);
     if (!Array.isArray(item.lore) || item.lore.length > IMPORT_LIMITS.loreLines) throw new Error(`Lore item ${index + 1} không hợp lệ`);
-    const lore = item.lore.map((line, loreIndex) => importText(line, `Lore ${index + 1}.${loreIndex + 1}`, IMPORT_LIMITS.loreLine)); const prompt = item.prompt === undefined ? "" : importText(item.prompt, `Prompt item ${index + 1}`, IMPORT_LIMITS.prompt, false);
+    const lore = item.lore.map((line, loreIndex) => importText(line, `Lore ${index + 1}.${loreIndex + 1}`, IMPORT_LIMITS.loreLine));
     const deluxeMenus = cloneDeluxeMenusItemConfig(item); validateDeluxeMenusItemConfig(deluxeMenus, container);
-    return { slot, itemId, amount, displayName, lore, prompt, action: importAction(item.action, catalogByMaterial), includeInExport: true, ...deluxeMenus } satisfies PlacedItem;
+    return { slot, itemId, amount, displayName, lore, action: importAction(item.action, catalogByMaterial), includeInExport: true, ...deluxeMenus } satisfies PlacedItem;
   });
   const sourceDeluxeMenus = importObject(data.deluxeMenus); const deluxeMenus = sourceDeluxeMenus ? structuredClone(sourceDeluxeMenus) as DeluxeMenusMenuConfig : undefined; if (deluxeMenus) validateDeluxeMenusMenuConfig(deluxeMenus);
   return { schemaVersion: 1, id: base.id, revision: base.revision, catalogVersion, title, description: base.description, containerId: container.id, itemDefaults: {}, placements, ...(deluxeMenus ? { deluxeMenus } : {}), updatedAt: new Date().toISOString() };
@@ -163,14 +163,14 @@ export function canonicalExportToProject(value: unknown, base: Pick<ProjectDocum
 export const FALLBACK_ITEMS: ItemDefinition[] = [];
 const defaultAction: ItemAction = { type: "prompt_only" };
 export interface EditorState {
-  projectId: string; revision: number; catalogVersion: string; catalog: ItemDefinition[]; title: string; description: string; container: ContainerSpec; placements: Record<number, PlacedItem>; itemDefaults: Record<string, ItemDefault>; deluxeMenus: DeluxeMenusMenuConfig;
-  favorites: string[]; recentItemIds: string[]; selectedSlot: number | null; selectedLibraryItemId: string | null; promptTarget: PromptTarget; query: string; category: ItemCategory | "All"; libraryTab: "All" | "Recent" | "Favorites";
-  previewMode: PreviewMode; showSlotNumbers: boolean; showPlayerInventory: boolean; showRoles: boolean; zoom: 0.75 | 1 | 1.25 | 1.5; overlay: Overlay; drawerTab: "Details" | "Prompt" | "DeluxeMenus" | "JSON";
-  draftPrompt: string; draftTitle: string; draftLore: string[]; draftDeveloperNotes: string; draftAction: ItemAction; draftDeluxeMenus: DeluxeMenusItemConfig;
+  projectId: string; revision: number; catalogVersion: string; catalog: ItemDefinition[]; title: string; description: string; jsonSkillId?: string; container: ContainerSpec; placements: Record<number, PlacedItem>; itemDefaults: Record<string, ItemDefault>; deluxeMenus: DeluxeMenusMenuConfig;
+  favorites: string[]; recentItemIds: string[]; selectedSlot: number | null; selectedLibraryItemId: string | null; editorTarget: EditorTarget; query: string; category: ItemCategory | "All"; libraryTab: "All" | "Recent" | "Favorites";
+  previewMode: PreviewMode; showSlotNumbers: boolean; showPlayerInventory: boolean; showRoles: boolean; zoom: 0.75 | 1 | 1.25 | 1.5; overlay: Overlay; drawerTab: "Details" | "DeluxeMenus" | "JSON";
+  draftTitle: string; draftLore: string[]; draftDeveloperNotes: string; draftAction: ItemAction; draftDeluxeMenus: DeluxeMenusItemConfig;
   toast: { message: string; tone: "success" | "info" | "warning" | "error"; undo?: boolean } | null; dirty: boolean;
 }
 export const initialState: EditorState = {
-  projectId: "main-menu", revision: 1, catalogVersion: "minecraft-java-1.21.8", catalog: FALLBACK_ITEMS, title: "Main Menu", description: "Menu chính cho server survival", container: CONTAINERS[0], placements: {}, itemDefaults: {}, deluxeMenus: {}, favorites: [], recentItemIds: [], selectedSlot: null, selectedLibraryItemId: null, promptTarget: null, query: "", category: "All", libraryTab: "All", previewMode: "editor", showSlotNumbers: true, showPlayerInventory: true, showRoles: true, zoom: 1, overlay: null, drawerTab: "Prompt", draftPrompt: "", draftTitle: "", draftLore: [], draftDeveloperNotes: "", draftAction: defaultAction, draftDeluxeMenus: {}, toast: null, dirty: false,
+  projectId: "main-menu", revision: 1, catalogVersion: "minecraft-java-1.21.8", catalog: FALLBACK_ITEMS, title: "Main Menu", description: "Menu chính cho server survival", container: CONTAINERS[0], placements: {}, itemDefaults: {}, deluxeMenus: {}, favorites: [], recentItemIds: [], selectedSlot: null, selectedLibraryItemId: null, editorTarget: null, query: "", category: "All", libraryTab: "All", previewMode: "editor", showSlotNumbers: true, showPlayerInventory: true, showRoles: true, zoom: 1, overlay: null, drawerTab: "Details", draftTitle: "", draftLore: [], draftDeveloperNotes: "", draftAction: defaultAction, draftDeluxeMenus: {}, toast: null, dirty: false,
 };
 export type Action =
   | { type: "HYDRATE"; project: ProjectDocument; catalog: ItemDefinition[]; dirty?: boolean }
@@ -179,7 +179,7 @@ export type Action =
   | { type: "SELECT_SLOT"; slot: number | null }
   | { type: "SELECT_LIBRARY"; itemId: string | null }
   | { type: "TOGGLE_FAVORITE"; itemId: string }
-  | { type: "OPEN_PROMPT"; target: PromptTarget }
+  | { type: "OPEN_EDITOR"; target: EditorTarget }
   | { type: "SET_QUERY"; query: string }
   | { type: "SET_CATEGORY"; category: EditorState["category"] }
   | { type: "SET_TAB"; tab: EditorState["libraryTab"] }
@@ -188,14 +188,14 @@ export type Action =
   | { type: "REMOVE_ITEM"; slot: number }
   | { type: "SET_AMOUNT"; slot: number; amount: number }
   | { type: "SET_TITLE"; title: string }
-  | { type: "SET_PROMPT_DRAFT"; prompt: string }
+  | { type: "SET_JSON_SKILL"; jsonSkillId?: string }
   | { type: "SET_DRAFT_TITLE"; title: string }
   | { type: "SET_DRAFT_LORE"; lore: string[] }
   | { type: "SET_DRAFT_NOTES"; notes: string }
   | { type: "SET_DRAFT_ACTION"; action: ItemAction }
   | { type: "SET_DRAFT_DELUXE_MENUS"; config: DeluxeMenusItemConfig }
   | { type: "SET_DELUXE_MENUS_MENU"; config: DeluxeMenusMenuConfig }
-  | { type: "SAVE_PROMPT" }
+  | { type: "SAVE_ITEM" }
   | { type: "SET_OPTION"; option: "showSlotNumbers" | "showPlayerInventory" | "showRoles"; value: boolean }
   | { type: "SET_MODE"; mode: PreviewMode }
   | { type: "SET_ZOOM"; zoom: EditorState["zoom"] }
@@ -203,6 +203,8 @@ export type Action =
   | { type: "CLOSE_OVERLAY" }
   | { type: "SET_DRAWER_TAB"; tab: EditorState["drawerTab"] }
   | { type: "SET_CONTAINER"; container: ContainerSpec }
+  | { type: "SET_ITEM_LOCK"; slot: number; locked: boolean }
+  | { type: "SET_ALL_ITEM_LOCKS"; locked: boolean }
   | { type: "RESET" }
   | { type: "TOAST"; toast: NonNullable<EditorState["toast"]> }
   | { type: "CLEAR_TOAST" }
@@ -212,7 +214,7 @@ export function getItem(itemId: string, catalog: ItemDefinition[] = FALLBACK_ITE
 export function isValidContainerSlot(slot: number, container: ContainerSpec): boolean { return Number.isInteger(slot) && slot >= 0 && slot < container.slots; }
 export function getFilteredItems(state: EditorState): ItemDefinition[] { const tokens = state.query.trim().toLowerCase().split(/\s+/).filter(Boolean); const favoriteIds = new Set(state.favorites); const recentIds = new Set(state.recentItemIds); return state.catalog.filter((entry) => { if (state.category !== "All" && entry.category !== state.category) return false; if (state.libraryTab === "Favorites" && !favoriteIds.has(entry.id)) return false; if (state.libraryTab === "Recent" && !recentIds.has(entry.id)) return false; const haystack = `${entry.id} ${entry.name} ${entry.material} ${entry.category} ${entry.description}`.toLowerCase(); return tokens.every((token) => haystack.includes(token)); }); }
 export function trimForContainer(placements: Record<number, PlacedItem>, container: ContainerSpec): Record<number, PlacedItem> { return Object.fromEntries(Object.entries(placements).filter(([slot]) => Number.isInteger(Number(slot)) && Number(slot) < container.slots)); }
-export function editorStateToProject(state: EditorState): ProjectDocument { return { schemaVersion: 1, id: state.projectId, revision: state.revision, catalogVersion: state.catalogVersion, title: state.title, description: state.description, containerId: state.container.id, itemDefaults: state.itemDefaults, placements: Object.values(state.placements).sort((a, b) => a.slot - b.slot), ...(Object.keys(state.deluxeMenus).length ? { deluxeMenus: state.deluxeMenus } : {}), updatedAt: new Date().toISOString() }; }
+export function editorStateToProject(state: EditorState): ProjectDocument { return { schemaVersion: 1, id: state.projectId, revision: state.revision, catalogVersion: state.catalogVersion, title: state.title, description: state.description, containerId: state.container.id, ...(state.jsonSkillId ? { jsonSkillId: state.jsonSkillId } : {}), itemDefaults: state.itemDefaults, placements: Object.values(state.placements).sort((a, b) => a.slot - b.slot), ...(Object.keys(state.deluxeMenus).length ? { deluxeMenus: state.deluxeMenus } : {}), updatedAt: new Date().toISOString() }; }
 
 export function categorizeItem(item: ItemDefinition): ItemCategory {
   const value = `${item.id} ${item.name} ${item.description}`.toLowerCase();
@@ -226,43 +228,43 @@ export function categorizeItem(item: ItemDefinition): ItemCategory {
 }
 export function projectToEditorState(project: ProjectDocument, catalog: ItemDefinition[]): EditorState {
   const container = CONTAINERS.find((entry) => entry.id === project.containerId) ?? CONTAINERS[0]; const placements = Object.fromEntries(project.placements.map((entry) => [entry.slot, entry])); const selectedSlot = project.placements[0]?.slot ?? null; const selected = selectedSlot === null ? undefined : placements[selectedSlot]; const categorizedCatalog = catalog.map((item) => ({ ...item, category: categorizeItem(item) }));
-  return { ...initialState, projectId: project.id, revision: project.revision, catalogVersion: project.catalogVersion, catalog: categorizedCatalog, title: project.title, description: project.description, container, placements, itemDefaults: project.itemDefaults ?? {}, deluxeMenus: cloneDeluxeMenusMenuConfig(project.deluxeMenus), selectedSlot, selectedLibraryItemId: selected?.itemId ?? null, promptTarget: selected ? { kind: "placement", slot: selected.slot } : null, draftPrompt: selected?.prompt ?? "", draftTitle: selected?.displayName ?? "", draftLore: selected?.lore ?? [], draftDeveloperNotes: selected?.developerNotes ?? "", draftAction: selected?.action ?? defaultAction, draftDeluxeMenus: cloneDeluxeMenusItemConfig(selected), dirty: false };
+  return { ...initialState, projectId: project.id, revision: project.revision, catalogVersion: project.catalogVersion, catalog: categorizedCatalog, title: project.title, description: project.description, ...(project.jsonSkillId ? { jsonSkillId: project.jsonSkillId } : {}), container, placements, itemDefaults: project.itemDefaults ?? {}, deluxeMenus: cloneDeluxeMenusMenuConfig(project.deluxeMenus), selectedSlot, selectedLibraryItemId: selected?.itemId ?? null, editorTarget: selected ? { kind: "placement", slot: selected.slot } : null, draftTitle: selected?.displayName ?? "", draftLore: selected?.lore ?? [], draftDeveloperNotes: selected?.developerNotes ?? "", draftAction: selected?.action ?? defaultAction, draftDeluxeMenus: cloneDeluxeMenusItemConfig(selected), dirty: false };
 }
-export function buildExport(state: EditorState, options: { includePrompts?: boolean } = {}): string {
-  const includePrompts = options.includePrompts ?? true; const items = Object.values(state.placements).filter((entry) => entry.includeInExport !== false && isValidContainerSlot(entry.slot, state.container)).sort((a, b) => a.slot - b.slot).map((entry) => { const definition = getItem(entry.itemId, state.catalog); const deluxeMenus = cloneDeluxeMenusItemConfig(entry); return { slot: entry.slot, itemId: entry.itemId, material: definition?.material ?? "UNKNOWN", amount: entry.amount, displayName: entry.displayName, lore: entry.lore, ...(includePrompts && entry.prompt.trim() ? { prompt: entry.prompt } : {}), action: entry.action, ...deluxeMenus }; });
-  return JSON.stringify({ format: "gui-forge/minecraft-java-gui", formatVersion: 1, catalogVersion: state.catalogVersion, container: { id: state.container.id, bukkitType: state.container.bukkitId, rows: state.container.rows, slots: state.container.slots }, title: state.title, ...(Object.keys(state.deluxeMenus).length ? { deluxeMenus: state.deluxeMenus } : {}), items }, null, 2);
+export function buildExport(state: EditorState, options: { cancelItemMovement?: boolean } = {}): string {
+  const items = Object.values(state.placements).filter((entry) => entry.includeInExport !== false && isValidContainerSlot(entry.slot, state.container)).sort((a, b) => a.slot - b.slot).map((entry) => { const definition = getItem(entry.itemId, state.catalog); const deluxeMenus = cloneDeluxeMenusItemConfig(entry); return { slot: entry.slot, itemId: entry.itemId, material: definition?.material ?? "UNKNOWN", amount: entry.amount, displayName: entry.displayName, lore: entry.lore, locked: entry.locked ?? true, action: entry.action, ...deluxeMenus }; });
+  return JSON.stringify({ format: "gui-forge/minecraft-java-gui", formatVersion: 1, catalogVersion: state.catalogVersion, container: { id: state.container.id, bukkitType: state.container.bukkitId, rows: state.container.rows, slots: state.container.slots }, title: state.title, cancelItemMovement: options.cancelItemMovement ?? true, ...(Object.keys(state.deluxeMenus).length ? { deluxeMenus: state.deluxeMenus } : {}), items }, null, 2);
 }
 
-function draftForTarget(state: EditorState, target: PromptTarget): Pick<EditorState, "draftPrompt" | "draftTitle" | "draftLore" | "draftDeveloperNotes" | "draftAction" | "draftDeluxeMenus"> {
-  if (target?.kind === "placement") { const item = state.placements[target.slot]; return { draftPrompt: item?.prompt ?? "", draftTitle: item?.displayName ?? "", draftLore: item?.lore ?? [], draftDeveloperNotes: item?.developerNotes ?? "", draftAction: item?.action ?? defaultAction, draftDeluxeMenus: cloneDeluxeMenusItemConfig(item) }; }
-  if (target?.kind === "library") { const definition = getItem(target.itemId, state.catalog); const defaults = state.itemDefaults[target.itemId]; return { draftPrompt: defaults?.prompt ?? "", draftTitle: definition?.name ?? "", draftLore: [], draftDeveloperNotes: defaults?.developerNotes ?? "", draftAction: defaults?.action ?? defaultAction, draftDeluxeMenus: {} }; }
-  return { draftPrompt: "", draftTitle: "", draftLore: [], draftDeveloperNotes: "", draftAction: defaultAction, draftDeluxeMenus: {} };
+function draftForTarget(state: EditorState, target: EditorTarget): Pick<EditorState, "draftTitle" | "draftLore" | "draftDeveloperNotes" | "draftAction" | "draftDeluxeMenus"> {
+  if (target?.kind === "placement") { const item = state.placements[target.slot]; return { draftTitle: item?.displayName ?? "", draftLore: item?.lore ?? [], draftDeveloperNotes: item?.developerNotes ?? "", draftAction: item?.action ?? defaultAction, draftDeluxeMenus: cloneDeluxeMenusItemConfig(item) }; }
+  if (target?.kind === "library") { const definition = getItem(target.itemId, state.catalog); const defaults = state.itemDefaults[target.itemId]; return { draftTitle: definition?.name ?? "", draftLore: [], draftDeveloperNotes: defaults?.developerNotes ?? "", draftAction: defaults?.action ?? defaultAction, draftDeluxeMenus: {} }; }
+  return { draftTitle: "", draftLore: [], draftDeveloperNotes: "", draftAction: defaultAction, draftDeluxeMenus: {} };
 }
 export function reducer(state: EditorState, action: Action): EditorState {
   switch (action.type) {
     case "HYDRATE": return { ...projectToEditorState(action.project, action.catalog), dirty: action.dirty ?? false };
     case "LOAD_CATALOG": return { ...state, catalog: action.catalog.map((item) => ({ ...item, category: categorizeItem(item) })), catalogVersion: action.version };
     case "MARK_SAVED": return { ...state, dirty: false, revision: action.revision ?? state.revision };
-    case "SELECT_SLOT": { const target = action.slot !== null && state.placements[action.slot] ? { kind: "placement" as const, slot: action.slot } : null; const next = { ...state, selectedSlot: action.slot, selectedLibraryItemId: action.slot === null ? null : state.placements[action.slot]?.itemId ?? state.selectedLibraryItemId, promptTarget: target }; return { ...next, ...draftForTarget(next, target) }; }
+    case "SELECT_SLOT": { const target = action.slot !== null && state.placements[action.slot] ? { kind: "placement" as const, slot: action.slot } : null; const next = { ...state, selectedSlot: action.slot, selectedLibraryItemId: action.slot === null ? null : state.placements[action.slot]?.itemId ?? state.selectedLibraryItemId, editorTarget: target }; return { ...next, ...draftForTarget(next, target) }; }
     case "SELECT_LIBRARY": { if (!action.itemId) return { ...state, selectedLibraryItemId: null }; return { ...state, selectedLibraryItemId: action.itemId, recentItemIds: [action.itemId, ...state.recentItemIds.filter((id) => id !== action.itemId)].slice(0, 24) }; }
     case "TOGGLE_FAVORITE": return { ...state, favorites: state.favorites.includes(action.itemId) ? state.favorites.filter((id) => id !== action.itemId) : [...state.favorites, action.itemId] };
-    case "OPEN_PROMPT": { const draft = draftForTarget(state, action.target); if (action.target?.kind === "placement") { const item = state.placements[action.target.slot]; return { ...state, selectedSlot: action.target.slot, selectedLibraryItemId: item?.itemId ?? null, promptTarget: action.target, overlay: "prompt", drawerTab: "Prompt", ...draft }; } if (action.target?.kind === "library") return { ...state, selectedLibraryItemId: action.target.itemId, promptTarget: action.target, overlay: "prompt", drawerTab: "Prompt", ...draft }; return { ...state, promptTarget: null, overlay: "prompt", drawerTab: "Prompt", ...draft }; }
+    case "OPEN_EDITOR": { const draft = draftForTarget(state, action.target); if (action.target?.kind === "placement") { const item = state.placements[action.target.slot]; return { ...state, selectedSlot: action.target.slot, selectedLibraryItemId: item?.itemId ?? null, editorTarget: action.target, overlay: "drawer", drawerTab: "Details", ...draft }; } if (action.target?.kind === "library") return { ...state, selectedLibraryItemId: action.target.itemId, editorTarget: action.target, overlay: "drawer", drawerTab: "Details", ...draft }; return { ...state, editorTarget: null, overlay: "drawer", drawerTab: "Details", ...draft }; }
     case "SET_QUERY": return { ...state, query: action.query };
     case "SET_CATEGORY": return { ...state, category: action.category };
     case "SET_TAB": return { ...state, libraryTab: action.tab };
-    case "PLACE_ITEM": { if (!isValidContainerSlot(action.slot, state.container)) return state; const definition = getItem(action.itemId, state.catalog); if (!definition) return { ...state, toast: { message: "Item không tồn tại trong catalog đã chọn", tone: "error" } }; const defaults = state.itemDefaults[action.itemId] ?? { prompt: "", action: defaultAction }; const next: PlacedItem = { slot: action.slot, itemId: action.itemId, amount: Math.min(action.amount ?? 1, definition.maxStack), displayName: definition.name, lore: [], prompt: defaults.prompt, action: structuredClone(defaults.action), developerNotes: defaults.developerNotes ?? "", includeInExport: true }; return { ...state, placements: { ...state.placements, [action.slot]: next }, selectedSlot: action.slot, selectedLibraryItemId: action.itemId, promptTarget: { kind: "placement", slot: action.slot }, dirty: true, ...draftForTarget({ ...state, placements: { ...state.placements, [action.slot]: next } }, { kind: "placement", slot: action.slot }) }; }
-    case "MOVE_ITEM": { if (!isValidContainerSlot(action.to, state.container) || !state.placements[action.from]) return state; const placements = { ...state.placements }; const moving = placements[action.from]; const target = placements[action.to]; placements[action.to] = { ...moving, slot: action.to }; if (target) placements[action.from] = { ...target, slot: action.from }; else delete placements[action.from]; return { ...state, placements, selectedSlot: action.to, promptTarget: { kind: "placement", slot: action.to }, dirty: true, toast: { message: `Đã chuyển item sang Slot ${action.to}`, tone: "success", undo: true } }; }
-    case "REMOVE_ITEM": { const removed = state.placements[action.slot]; const placements = { ...state.placements }; delete placements[action.slot]; return { ...state, placements, selectedSlot: null, selectedLibraryItemId: null, promptTarget: null, dirty: true, toast: { message: removed ? `Đã xóa ${removed.displayName} khỏi Slot ${action.slot}` : "Đã xóa item khỏi GUI", tone: "info", undo: true } }; }
+    case "PLACE_ITEM": { if (!isValidContainerSlot(action.slot, state.container)) return state; const definition = getItem(action.itemId, state.catalog); if (!definition) return { ...state, toast: { message: "Item không tồn tại trong catalog đã chọn", tone: "error" } }; const defaults = state.itemDefaults[action.itemId] ?? { action: defaultAction }; const next: PlacedItem = { slot: action.slot, itemId: action.itemId, amount: Math.min(action.amount ?? 1, definition.maxStack), displayName: definition.name, lore: [], action: structuredClone(defaults.action), developerNotes: defaults.developerNotes ?? "", includeInExport: true, locked: true }; return { ...state, placements: { ...state.placements, [action.slot]: next }, selectedSlot: action.slot, selectedLibraryItemId: action.itemId, editorTarget: { kind: "placement", slot: action.slot }, dirty: true, ...draftForTarget({ ...state, placements: { ...state.placements, [action.slot]: next } }, { kind: "placement", slot: action.slot }) }; }
+    case "MOVE_ITEM": { if (!isValidContainerSlot(action.to, state.container) || !state.placements[action.from]) return state; const placements = { ...state.placements }; const moving = placements[action.from]; const target = placements[action.to]; placements[action.to] = { ...moving, slot: action.to }; if (target) placements[action.from] = { ...target, slot: action.from }; else delete placements[action.from]; return { ...state, placements, selectedSlot: action.to, editorTarget: { kind: "placement", slot: action.to }, dirty: true, toast: { message: `Đã chuyển item sang Slot ${action.to}`, tone: "success", undo: true } }; }
+    case "REMOVE_ITEM": { const removed = state.placements[action.slot]; const placements = { ...state.placements }; delete placements[action.slot]; return { ...state, placements, selectedSlot: null, selectedLibraryItemId: null, editorTarget: null, dirty: true, toast: { message: removed ? `Đã xóa ${removed.displayName} khỏi Slot ${action.slot}` : "Đã xóa item khỏi GUI", tone: "info", undo: true } }; }
     case "SET_AMOUNT": { const current = state.placements[action.slot]; const max = current ? getItem(current.itemId, state.catalog)?.maxStack ?? 64 : 64; return current ? { ...state, placements: { ...state.placements, [action.slot]: { ...current, amount: Math.max(1, Math.min(max, action.amount)) } }, dirty: true } : state; }
     case "SET_TITLE": return { ...state, title: action.title, dirty: true };
-    case "SET_PROMPT_DRAFT": return { ...state, draftPrompt: action.prompt };
+    case "SET_JSON_SKILL": return { ...state, jsonSkillId: action.jsonSkillId, dirty: true };
     case "SET_DRAFT_TITLE": return { ...state, draftTitle: action.title };
     case "SET_DRAFT_LORE": return { ...state, draftLore: action.lore };
     case "SET_DRAFT_NOTES": return { ...state, draftDeveloperNotes: action.notes };
     case "SET_DRAFT_ACTION": return { ...state, draftAction: action.action };
     case "SET_DRAFT_DELUXE_MENUS": return { ...state, draftDeluxeMenus: action.config };
     case "SET_DELUXE_MENUS_MENU": return { ...state, deluxeMenus: action.config, dirty: true };
-    case "SAVE_PROMPT": { const data = { prompt: state.draftPrompt, displayName: state.draftTitle, lore: state.draftLore, developerNotes: state.draftDeveloperNotes }; if (state.promptTarget?.kind === "placement") { const current = state.placements[state.promptTarget.slot]; if (!current) return state; try { validateDeluxeMenusItemConfig(state.draftDeluxeMenus, state.container); } catch (error) { return { ...state, toast: { message: error instanceof Error ? error.message : "DeluxeMenus config không hợp lệ", tone: "error" } }; } return { ...state, placements: { ...state.placements, [state.promptTarget.slot]: { ...current, ...data, displayName: state.draftTitle || current.displayName, action: state.draftAction, ...cloneDeluxeMenusItemConfig(state.draftDeluxeMenus) } }, dirty: true, toast: { message: `Đã lưu cấu hình ${state.draftTitle || current.displayName}`, tone: "success" } }; } if (state.promptTarget?.kind === "library") { const definition = getItem(state.promptTarget.itemId, state.catalog); return { ...state, itemDefaults: { ...state.itemDefaults, [state.promptTarget.itemId]: { prompt: state.draftPrompt, action: state.draftAction, developerNotes: state.draftDeveloperNotes } }, dirty: true, toast: { message: `Đã lưu prompt mặc định cho ${definition?.name ?? "item"}`, tone: "success" } }; } return state; }
+    case "SAVE_ITEM": { const data = { displayName: state.draftTitle, lore: state.draftLore, developerNotes: state.draftDeveloperNotes }; if (state.editorTarget?.kind === "placement") { const current = state.placements[state.editorTarget.slot]; if (!current) return state; try { validateDeluxeMenusItemConfig(state.draftDeluxeMenus, state.container); } catch (error) { return { ...state, toast: { message: error instanceof Error ? error.message : "DeluxeMenus config không hợp lệ", tone: "error" } }; } return { ...state, placements: { ...state.placements, [state.editorTarget.slot]: { ...current, ...data, displayName: state.draftTitle || current.displayName, action: state.draftAction, ...cloneDeluxeMenusItemConfig(state.draftDeluxeMenus) } }, dirty: true, toast: { message: `Đã lưu cấu hình ${state.draftTitle || current.displayName}`, tone: "success" } }; } if (state.editorTarget?.kind === "library") { const definition = getItem(state.editorTarget.itemId, state.catalog); return { ...state, itemDefaults: { ...state.itemDefaults, [state.editorTarget.itemId]: { action: state.draftAction, developerNotes: state.draftDeveloperNotes } }, dirty: true, toast: { message: `Đã lưu cấu hình mặc định cho ${definition?.name ?? "item"}`, tone: "success" } }; } return state; }
     case "SET_OPTION": return { ...state, [action.option]: action.value };
     case "SET_MODE": return { ...state, previewMode: action.mode };
     case "SET_ZOOM": return { ...state, zoom: action.zoom };
@@ -270,6 +272,8 @@ export function reducer(state: EditorState, action: Action): EditorState {
     case "CLOSE_OVERLAY": return { ...state, overlay: null };
     case "SET_DRAWER_TAB": return { ...state, drawerTab: action.tab };
     case "SET_CONTAINER": { const placements = trimForContainer(state.placements, action.container); return { ...state, container: action.container, placements, selectedSlot: state.selectedSlot !== null && isValidContainerSlot(state.selectedSlot, action.container) ? state.selectedSlot : null, overlay: null, dirty: true, toast: { message: `Đã chuyển sang ${action.container.label} · ${action.container.slots} slots`, tone: "success" } }; }
+    case "SET_ITEM_LOCK": { const current = state.placements[action.slot]; if (!current) return state; return { ...state, placements: { ...state.placements, [action.slot]: { ...current, locked: action.locked } }, dirty: true }; }
+    case "SET_ALL_ITEM_LOCKS": return { ...state, placements: Object.fromEntries(Object.entries(state.placements).map(([slot, item]) => [slot, { ...item, locked: action.locked }])), dirty: true };
     case "RESET": return initialState;
     case "TOAST": return { ...state, toast: action.toast };
     case "CLEAR_TOAST": return { ...state, toast: null };

@@ -141,15 +141,7 @@ export function validateDeluxeMenusExport(
     if (item.action.type === "prompt_only") {
       issues.push({
         path: `items[${item.slot}].action`,
-        message: `Item has prompt-only action. No runtime action will be executed.`,
-        severity: "warning",
-      });
-    }
-
-    if (item.prompt) {
-      issues.push({
-        path: `items[${item.slot}].prompt`,
-        message: `Prompt field will not be exported to DeluxeMenus YAML.`,
+        message: `Item has no runtime action.`,
         severity: "warning",
       });
     }

@@ -31,7 +31,6 @@ function makeTestItem(overrides: Partial<JsonGuiExport["items"][0]> = {}) {
     amount: 1,
     displayName: "Compass",
     lore: [],
-    prompt: "",
     action: { type: "prompt_only" as const },
     ...overrides,
   };
@@ -151,12 +150,12 @@ describe("DeluxeMenus mapper", () => {
     expect(document.items.item_0.left_click_commands).toEqual(["[give] DIAMOND 3"]);
   });
 
-  it("warns on prompt_only action", () => {
+  it("warns when action is absent", () => {
     const input = makeTestExport({
       items: [makeTestItem({ action: { type: "prompt_only" } })],
     });
     const { validation } = mapJsonGuiToDeluxeMenus(input);
-    expect(validation.issues.some(i => i.message.includes("prompt only"))).toBe(true);
+    expect(validation.issues.some(i => i.message.includes("no runtime action"))).toBe(true);
   });
 
   it("generates unique identifiers for duplicate slots", () => {
@@ -426,13 +425,6 @@ describe("DeluxeMenus validation", () => {
     expect(result.issues.some(i => i.severity === "warning" && i.message.includes("No open command"))).toBe(true);
   });
 
-  it("reports warning for prompt field", () => {
-    const input = makeTestExport({
-      items: [makeTestItem({ prompt: "Open the menu" })],
-    });
-    const result = validateDeluxeMenusExport(input, { openCommand: "menu" });
-    expect(result.issues.some(i => i.severity === "warning" && i.message.includes("Prompt field"))).toBe(true);
-  });
 });
 
 describe("External menu snippet", () => {

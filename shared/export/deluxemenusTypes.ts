@@ -106,7 +106,6 @@ export interface JsonGuiPlacedItem {
   amount: number;
   displayName: string;
   lore: string[];
-  prompt: string;
   action: JsonGuiAction;
   developerNotes?: string;
   includeInExport?: boolean;
@@ -176,7 +175,6 @@ export interface DeluxeMenusExportOptions {
   menuId?: string;
   openCommand?: string;
   registerCommand?: boolean;
-  includePrompts?: boolean;
   includeDeveloperNotes?: boolean;
   emitEmptyOpenCommand?: boolean;
 }

@@ -30,6 +30,31 @@ test("loads seed project and returns catalog ETag", async () => {
   assert.equal(project.status, 200); assert.deepEqual(body.placements, []); assert.match(body.catalogVersion, /^minecraft-java-1\.21\.8/);
 });
 
+test("lists JsonSkills only for authorized requests and reads deterministic content", async () => {
+  const denied = await fetch(`${base}/api/v1/json-skills`);
+  assert.equal(denied.status, 401);
+  const list = await api("/api/v1/json-skills");
+  assert.equal(list.status, 200);
+  assert.ok((await list.json()).some((skill) => skill.id === "minecraft-standard"));
+  const skill = await api("/api/v1/json-skills/minecraft-standard");
+  assert.equal(skill.status, 200);
+  assert.match((await skill.json()).content, /Spacing and slots/);
+});
+
+test("persists selected JsonSkill and rejects unknown selections", async () => {
+  const loaded = await api("/api/v1/projects/main-menu");
+  const project = await loaded.json();
+  project.jsonSkillId = "minecraft-standard";
+  const saved = await api("/api/v1/projects/main-menu", { method: "PUT", headers: { "Content-Type": "application/json", "If-Match": loaded.headers.get("etag") }, body: JSON.stringify(project) });
+  assert.equal(saved.status, 200);
+  assert.equal((await saved.json()).jsonSkillId, "minecraft-standard");
+  const current = await api("/api/v1/projects/main-menu");
+  const invalid = await current.json();
+  invalid.jsonSkillId = "missing-skill";
+  const rejected = await api("/api/v1/projects/main-menu", { method: "PUT", headers: { "Content-Type": "application/json", "If-Match": current.headers.get("etag") }, body: JSON.stringify(invalid) });
+  assert.equal(rejected.status, 422);
+});
+
 test("allows Tauri origin and rejects untrusted browser origins", async () => {
   const tauri = await fetch(`${base}/api/v1/health`, { headers: { Origin: "https://tauri.localhost" } });
   assert.equal(tauri.status, 200);
@@ -49,6 +74,7 @@ test("requires ETag, rejects stale writes, and returns canonical export", async 
   project.placements = [{ slot: 10, itemId: "minecraft:compass", amount: 1, displayName: "Compass", lore: [], prompt: "", action: { type: "prompt_only" } }];
   const saved = await api("/api/v1/projects/main-menu", { method: "PUT", headers: { "Content-Type": "application/json", "If-Match": etag }, body: JSON.stringify(project) });
   assert.equal(saved.status, 200); const savedBody = await saved.json(); const savedEtag = saved.headers.get("etag");
+  assert.equal("prompt" in savedBody.placements[0], false);
   const stale = await api("/api/v1/projects/main-menu", { method: "PUT", headers: { "Content-Type": "application/json", "If-Match": etag }, body: JSON.stringify(project) });
   assert.equal(stale.status, 412);
   const exported = await api("/api/v1/projects/main-menu/export"); const json = await exported.json();

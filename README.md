@@ -60,7 +60,7 @@ The goal is not to claim that JSON is universally better than YAML. YAML remains
 - Visual container and slot editor.
 - Minecraft item catalog with search, filtering, sorting, and quick placement.
 - Drag-and-drop item positioning.
-- Item properties such as material, amount, display metadata, prompt, and action data.
+- Item properties such as material, amount, display metadata, and action data.
 - Multiple supported container layouts.
 - Direct slot-number mapping between the canvas and exported JSON.
 - Optional player-inventory preview that is not included in the export.
@@ -69,14 +69,13 @@ The goal is not to claim that JSON is universally better than YAML. YAML remains
 - Server-backed project saving with conflict awareness.
 - Connect Plugin Project: local Paper/Spigot/Bukkit project scan, `.jsongui` workspace, multi-GUI explorer, and file-change notices.
 - JSON preview, validation status, clipboard copy, and file download.
-- Optional inclusion of per-item prompts for AI-assisted plugin implementation.
 
 ## Example workflow
 
 1. Start the local API and web editor.
 2. Select the required Minecraft container type and size.
 3. Search the item catalog and place items into slots.
-4. Configure item properties, prompts, and actions.
+4. Configure item properties and actions.
 5. Review the layout visually instead of discovering spacing problems in-game.
 6. Export the validated JSON document.
 7. Load the JSON from your own Java plugin or provide it to an AI coding assistant as an implementation contract.
@@ -98,7 +97,6 @@ The export is designed as a compact contract between the editor and plugin code.
       "slot": 11,
       "material": "DIAMOND_SWORD",
       "amount": 1,
-      "prompt": "Open the combat menu",
       "action": {
         "type": "open_gui",
         "value": "combat-menu"

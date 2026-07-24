@@ -9,6 +9,7 @@ import { WorkspaceStore } from "./workspace-store.mjs";
 import { WorkspaceWatcher } from "./workspace-watcher.mjs";
 import { LIMITS, PROJECT_RE, ValidationError, canonicalExport, problem } from "./schema.mjs";
 import { exportDeluxeMenus } from "./deluxemenus.mjs";
+import { JsonSkillStore } from "./json-skill-store.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, "..");
@@ -103,9 +104,10 @@ function validOrigin(request) { const origin = request.headers.origin; return !o
 
 export async function createApp({ dataRoot = path.join(repoRoot, "data"), distRoot = path.join(repoRoot, "dist"), seedFile = path.join(repoRoot, "shared", "seed-v1.json"), resourceRoot = repoRoot } = {}) {
   const seed = await json(seedFile);
+  const jsonSkills = new JsonSkillStore({ root: process.env.GUI_FORGE_JSON_SKILL_ROOT ?? path.join(resourceRoot, "JsonSkill") });
   const catalogs = new CatalogStore({ root: dataRoot, seed: seed.catalog });
   await catalogs.initialize();
-  const projects = new ProjectStore({ root: dataRoot, seed: seed.project, catalogs, containers: seed.containers });
+  const projects = new ProjectStore({ root: dataRoot, seed: seed.project, catalogs, containers: seed.containers, jsonSkills });
   await projects.initialize();
 
   // Build texture map: itemName → actual PNG filename
@@ -259,6 +261,15 @@ export async function createApp({ dataRoot = path.join(repoRoot, "data"), distRo
       const current = await catalogs.getCurrent();
       return send(response, 200, { status: "ok", apiVersion: 1, storage: "ok", catalog: { status: current.catalog.version === seed.catalog.version ? "seed" : "active", version: current.catalog.version, count: current.catalog.items.length } }, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
     }
+    if (pathname === "/api/v1/json-skills") {
+      if (request.method !== "GET") return methodNotAllowed(response, requestId);
+      return send(response, 200, await jsonSkills.list(), { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
+    }
+    const jsonSkillMatch = pathname.match(/^\/api\/v1\/json-skills\/([a-z0-9]+(?:-[a-z0-9]+)*)$/);
+    if (jsonSkillMatch) {
+      if (request.method !== "GET") return methodNotAllowed(response, requestId);
+      return send(response, 200, await jsonSkills.get(jsonSkillMatch[1]), { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
+    }
     if (pathname === "/api/v1/catalog/current" || pathname.startsWith("/api/v1/catalog/versions/")) {
       if (request.method !== "GET") return methodNotAllowed(response, requestId);
       const version = pathname === "/api/v1/catalog/current" ? undefined : decodeURIComponent(pathname.slice("/api/v1/catalog/versions/".length));
@@ -285,14 +296,12 @@ export async function createApp({ dataRoot = path.join(repoRoot, "data"), distRo
       if (request.method !== "GET") return methodNotAllowed(response, requestId);
       const { project, catalog } = await projects.export(projectId);
       const urlObj = new URL(request.url, "http://127.0.0.1");
-      const includePrompts = urlObj.searchParams.get("includePrompts") !== "false";
       const format = urlObj.searchParams.get("format") || "json";
       const openCommand = urlObj.searchParams.get("openCommand") || "";
       const registerCommand = urlObj.searchParams.get("registerCommand") === "true";
       
       if (format === "deluxemenus") {
         const yaml = exportDeluxeMenus(project, catalog, seed.containers, { 
-          includePrompts, 
           openCommand, 
           registerCommand 
         });
@@ -304,7 +313,7 @@ export async function createApp({ dataRoot = path.join(repoRoot, "data"), distRo
         });
       }
       
-      const exported = canonicalExport(project, catalog, seed.containers, { includePrompts });
+      const exported = canonicalExport(project, catalog, seed.containers);
       return send(response, 200, exported, { "Content-Type": "application/json; charset=utf-8", "Content-Disposition": `attachment; filename="${projectId}.json"`, "Cache-Control": "no-store" });
     }
     if (request.method === "GET") {

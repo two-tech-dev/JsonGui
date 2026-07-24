@@ -11,23 +11,25 @@ describe("GUI Forge editor domain", () => {
   it("validates container slots and trims outside range", () => {
     expect(isValidContainerSlot(0, CONTAINERS[0])).toBe(true);
     expect(isValidContainerSlot(54, CONTAINERS[0])).toBe(false);
-    const placements = { 10: { slot: 10, itemId: "minecraft:compass", amount: 1, displayName: "Compass", lore: [], prompt: "", action: { type: "prompt_only" as const } }, 40: { slot: 40, itemId: "minecraft:paper", amount: 1, displayName: "Paper", lore: [], prompt: "", action: { type: "prompt_only" as const } } };
+    const placements = { 10: { slot: 10, itemId: "minecraft:compass", amount: 1, displayName: "Compass", lore: [], action: { type: "prompt_only" as const } }, 40: { slot: 40, itemId: "minecraft:paper", amount: 1, displayName: "Paper", lore: [], action: { type: "prompt_only" as const } } };
     expect(Object.keys(trimForContainer(placements, CONTAINERS[1])).map(Number)).toEqual([10]);
   });
 
   it("exports sorted valid JSON without preview-only player inventory", () => {
-    const state = { ...initialState, catalog: [{ id: "minecraft:compass", name: "Compass", material: "COMPASS", category: "Tools" as const, icon: "compass", maxStack: 1, description: "" }], placements: { 10: { slot: 10, itemId: "minecraft:compass", amount: 1, displayName: "Compass", lore: [], prompt: "Open quests", action: { type: "prompt_only" as const } } } };
-    const json = JSON.parse(buildExport(state)) as { container: { bukkitType: string; slots: number }; items: Array<{ slot: number; material: string; prompt?: string }> };
+    const state = { ...initialState, catalog: [{ id: "minecraft:compass", name: "Compass", material: "COMPASS", category: "Tools" as const, icon: "compass", maxStack: 1, description: "" }], placements: { 10: { slot: 10, itemId: "minecraft:compass", amount: 1, displayName: "Compass", lore: [], action: { type: "prompt_only" as const } } } };
+    const json = JSON.parse(buildExport(state)) as { cancelItemMovement: boolean; container: { bukkitType: string; slots: number }; items: Array<{ slot: number; material: string }> };
+    expect(json.cancelItemMovement).toBe(true);
     expect(json.container.bukkitType).toBe("CHEST");
     expect(json.items.map((entry) => entry.slot)).toEqual([10]);
-    expect(json.items[0].prompt).toBe("Open quests");
+    expect(json.items[0]).not.toHaveProperty("prompt");
   });
 
   it("imports canonical JSON export into current project metadata", () => {
     const catalog = [{ id: "minecraft:allay_spawn_egg", name: "Allay Spawn Egg", material: "ALLAY_SPAWN_EGG", category: "Utility" as const, icon: "allay_spawn_egg", maxStack: 64, description: "" }];
     const project = canonicalExportToProject({ format: "gui-forge/minecraft-java-gui", formatVersion: 1, catalogVersion: "catalog-v1", container: { id: "single-chest", bukkitType: "CHEST", rows: 3, slots: 27 }, title: "Cac", items: [{ slot: 20, itemId: "minecraft:allay_spawn_egg", material: "ALLAY_SPAWN_EGG", amount: 1, displayName: "Allay Spawn Egg", lore: [], action: { type: "prompt_only" } }] }, { id: "main-menu", revision: 4, description: "Menu chính" }, catalog);
     expect(project).toMatchObject({ schemaVersion: 1, id: "main-menu", revision: 4, catalogVersion: "catalog-v1", title: "Cac", containerId: "single-chest", itemDefaults: {} });
-    expect(project.placements).toEqual([expect.objectContaining({ slot: 20, prompt: "", includeInExport: true })]);
+    expect(project.placements).toEqual([expect.objectContaining({ slot: 20, includeInExport: true })]);
+    expect(project.placements[0]).not.toHaveProperty("prompt");
   });
 
   it("rejects invalid canonical export items", () => {
@@ -66,16 +68,16 @@ describe("GUI Forge editor domain", () => {
   });
 
   it("keeps drawer drafts local until saving placement details", () => {
-    const state = { ...initialState, catalog: [{ id: "minecraft:compass", name: "Compass", material: "COMPASS", category: "Tools" as const, icon: "compass", maxStack: 1, description: "" }], placements: { 10: { slot: 10, itemId: "minecraft:compass", amount: 1, displayName: "Compass", lore: [], prompt: "", action: { type: "prompt_only" as const } } }, promptTarget: { kind: "placement" as const, slot: 10 } };
+    const state = { ...initialState, catalog: [{ id: "minecraft:compass", name: "Compass", material: "COMPASS", category: "Tools" as const, icon: "compass", maxStack: 1, description: "" }], placements: { 10: { slot: 10, itemId: "minecraft:compass", amount: 1, displayName: "Compass", lore: [], action: { type: "prompt_only" as const } } }, editorTarget: { kind: "placement" as const, slot: 10 } };
     const drafted = reducer(state, { type: "SET_DRAFT_LORE", lore: ["Line one"] });
     expect(drafted.dirty).toBe(false);
-    const saved = reducer(drafted, { type: "SAVE_PROMPT" });
+    const saved = reducer(drafted, { type: "SAVE_ITEM" });
     expect(saved.placements[10].lore).toEqual(["Line one"]);
     expect(saved.dirty).toBe(true);
   });
 
   it("deletes placed item through reducer", () => {
-    const state = { ...initialState, catalog: [{ id: "minecraft:compass", name: "Compass", material: "COMPASS", category: "Tools" as const, icon: "compass", maxStack: 1, description: "" }], placements: { 10: { slot: 10, itemId: "minecraft:compass", amount: 1, displayName: "Compass", lore: [], prompt: "", action: { type: "prompt_only" as const } } } };
+    const state = { ...initialState, catalog: [{ id: "minecraft:compass", name: "Compass", material: "COMPASS", category: "Tools" as const, icon: "compass", maxStack: 1, description: "" }], placements: { 10: { slot: 10, itemId: "minecraft:compass", amount: 1, displayName: "Compass", lore: [], action: { type: "prompt_only" as const } } } };
     const next = reducer(state, { type: "REMOVE_ITEM", slot: 10 });
     expect(next.placements).toEqual({});
     expect(next.toast?.message).toContain("Slot 10");

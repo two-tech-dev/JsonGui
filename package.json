@@ -8,6 +8,7 @@
     "dev:web": "vite",
     "dev:api": "node --watch server/index.mjs",
     "start": "node server/index.mjs",
+    "mcp": "node server/mcp.mjs",
     "desktop:dev": "tauri dev",
     "desktop:stage-node": "powershell -ExecutionPolicy Bypass -File scripts/stage-node-sidecar.ps1",
     "desktop:build": "npm run desktop:stage-node && tauri build",

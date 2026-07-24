@@ -693,6 +693,8 @@ button:disabled { cursor: not-allowed; opacity: .4; }
 
 /* Minecraft Frame rendering */
 .minecraft-frame {
+  position: relative;
+  z-index: 0;
   width: max-content;
   max-width: 100%;
   margin: auto;
@@ -706,9 +708,12 @@ button:disabled { cursor: not-allowed; opacity: .4; }
   justify-content: space-between;
   margin: 0 1px 4px;
   color: #2b2b2b;
-  font: 9px var(--font-mono);
+  font: clamp(11px, calc(var(--slot-size) / 3), 18px) var(--font-mono);
   font-weight: bold;
 }
+.minecraft-gui-title { max-width: calc(var(--slot-size) * 5); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.item-lock-all { padding: 1px 4px; border: 1px solid #555; background: #777; color: #fff; font: 8px var(--font-mono); display: inline-flex; align-items: center; gap: 3px; }
+
 .frame-divider {
   height: 2px;
   background: #555;
@@ -742,6 +747,7 @@ button:disabled { cursor: not-allowed; opacity: .4; }
   transition: all .1s ease-out;
 }
 .inventory-slot:hover {
+  z-index: 20;
   filter: brightness(1.1);
 }
 .inventory-slot.selected {
@@ -754,6 +760,10 @@ button:disabled { cursor: not-allowed; opacity: .4; }
 }
 .inventory-slot.player { opacity: .6; }
 .inventory-slot .pixel-icon { image-rendering: pixelated; }
+.minecraft-tooltip { display: none; position: absolute; z-index: 100; left: calc(100% + max(4px, var(--slot-size) / 10)); top: calc(var(--slot-size) / -10); min-width: max-content; max-width: calc(var(--slot-size) * 6); padding: max(5px, calc(var(--slot-size) / 9)) max(7px, calc(var(--slot-size) / 7)); background: #100010; border: max(2px, calc(var(--slot-size) / 18)) solid #2a0054; box-shadow: 1px 1px #000; color: #fff; font: max(12px, calc(var(--slot-size) / 3.2)) var(--font-mono); line-height: 1.35; text-align: left; pointer-events: none; }
+.minecraft-tooltip strong, .minecraft-tooltip > span { display: block; white-space: pre-wrap; }
+.inventory-slot:hover .minecraft-tooltip { display: block; }
+.minecraft-obfuscated { text-shadow: 1px 0 currentColor, -1px 0 currentColor; }
 
 .slot-number {
   position: absolute;
